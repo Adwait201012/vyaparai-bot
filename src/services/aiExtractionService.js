@@ -1,11 +1,10 @@
-const { GoogleGenerativeAI } = require("@google/generative-ai");
+const Groq = require("groq-sdk");
 const env = require("../config/env");
 
 const SYSTEM_PROMPT =
   "You are a kirana store assistant. Extract customer name and amount from the message. Reply ONLY in JSON like this: {customerName: 'Sharma ji', amount: 500, type: 'udhaar'} or {customerName: 'Sharma ji', amount: 200, type: 'wapas'} or {type: 'unknown'} if not relevant";
 
-const genAI = new GoogleGenerativeAI(env.geminiApiKey);
-const model = genAI.getGenerativeModel({ model: "gemini-2.0-flash-lite" });
+const client = new Groq({ apiKey: env.groqApiKey });
 
 function normalizeJsonText(rawText) {
   const cleaned = rawText.trim().replace(/^```json\s*/i, "").replace(/```$/i, "");
@@ -15,9 +14,22 @@ function normalizeJsonText(rawText) {
 }
 
 async function extractTransaction(messageText) {
-  const prompt = `${SYSTEM_PROMPT}\n\nMessage: ${messageText}`;
-  const result = await model.generateContent(prompt);
-  const output = result.response.text();
+  const completion = await client.chat.completions.create({
+    model: "llama-3.1-8b-instant",
+    temperature: 0,
+    messages: [
+      {
+        role: "system",
+        content: SYSTEM_PROMPT,
+      },
+      {
+        role: "user",
+        content: messageText,
+      },
+    ],
+  });
+
+  const output = completion.choices?.[0]?.message?.content || "";
 
   const normalized = normalizeJsonText(output);
   let parsed;

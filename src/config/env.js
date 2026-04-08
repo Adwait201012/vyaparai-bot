@@ -27,5 +27,5 @@ module.exports = {
   twilioWhatsappFrom: requireEnvAny(["TWILIO_WHATSAPP_NUMBER", "TWILIO_WHATSAPP_FROM"]),
   supabaseUrl: requireEnv("SUPABASE_URL"),
   supabaseKey: requireEnv("SUPABASE_KEY"),
-  geminiApiKey: requireEnv("GEMINI_API_KEY"),
+  groqApiKey: requireEnv("GROQ_API_KEY"),
 };
