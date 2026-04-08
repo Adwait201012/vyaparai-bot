@@ -5,7 +5,7 @@ No website, no frontend.
 
 ### Tech stack
 - Node.js + Express
-- WhatsApp Cloud API (Meta)
+- Twilio WhatsApp API
 - Supabase
 
 ## First feature implemented
@@ -24,7 +24,7 @@ Bot will:
 - `src/routes/webhookRoutes.js` - WhatsApp webhook routes
 - `src/controllers/webhookController.js` - webhook verify + message handling
 - `src/services/udhaarService.js` - Supabase insert logic
-- `src/services/whatsappService.js` - send WhatsApp message via Cloud API
+- `src/services/whatsappService.js` - send WhatsApp message via Twilio API
 - `src/utils/parseUdhaarMessage.js` - parses text like "`name amount udhaar`"
 - `src/config/env.js` - loads and validates env vars
 - `src/config/supabase.js` - initializes Supabase client
@@ -52,9 +52,8 @@ Copy-Item .env.example .env
 npm run dev
 ```
 
-5. Configure webhook in Meta:
-- Verify URL: `https://your-domain.com/webhook`
-- Verify token: same as `WHATSAPP_VERIFY_TOKEN`
+5. Configure webhook in Twilio:
+- Webhook URL: `https://your-domain.com/webhook`
 
 ## Test quickly
 Send WhatsApp message from allowed test number:

@@ -22,12 +22,10 @@ function requireEnvAny(names) {
 
 module.exports = {
   port: process.env.PORT || 3000,
-  whatsappVerifyToken: requireEnv("WHATSAPP_VERIFY_TOKEN"),
-  whatsappAccessToken: requireEnvAny(["WHATSAPP_TOKEN", "WHATSAPP_ACCESS_TOKEN"]),
-  whatsappPhoneNumberId: requireEnvAny([
-    "PHONE_NUMBER_ID",
-    "WHATSAPP_PHONE_NUMBER_ID",
-  ]),
+  twilioAccountSid: requireEnv("TWILIO_ACCOUNT_SID"),
+  twilioAuthToken: requireEnv("TWILIO_AUTH_TOKEN"),
+  twilioWhatsappFrom: requireEnvAny(["TWILIO_WHATSAPP_NUMBER", "TWILIO_WHATSAPP_FROM"]),
   supabaseUrl: requireEnv("SUPABASE_URL"),
   supabaseKey: requireEnv("SUPABASE_KEY"),
+  geminiApiKey: requireEnv("GEMINI_API_KEY"),
 };

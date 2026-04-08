@@ -8,5 +8,6 @@ const router = express.Router();
 
 router.get("/webhook", verifyWebhook);
 router.post("/webhook", receiveWebhook);
+router.post("/twilio/webhook", receiveWebhook);
 
 module.exports = router;

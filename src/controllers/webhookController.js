@@ -1,45 +1,48 @@
-const env = require("../config/env");
-const { parseUdhaarMessage } = require("../utils/parseUdhaarMessage");
-const { logUdhaar } = require("../services/udhaarService");
+const { extractTransaction } = require("../services/aiExtractionService");
+const { logUdhaar, logWapas } = require("../services/udhaarService");
 const { sendTextMessage } = require("../services/whatsappService");
 
 const verifyWebhook = (req, res) => {
-  const mode = req.query['hub.mode'];
-  const token = req.query['hub.verify_token'];
-  const challenge = req.query['hub.challenge'];
-  
-  if (mode === 'subscribe' && token === process.env.WHATSAPP_VERIFY_TOKEN) {
-    res.status(200).send(challenge);
-  } else {
-    res.status(403).send('Verification failed');
-  }
+  res.status(200).send("Twilio webhook is active");
 };
 
 async function receiveWebhook(req, res) {
-  // Respond quickly so Meta doesn't retry
-  res.status(200).json({ received: true });
+  // Twilio expects quick 200 response to acknowledge webhook.
+  res.status(200).send("ok");
 
   try {
-    const change = req.body?.entry?.[0]?.changes?.[0]?.value;
-    const message = change?.messages?.[0];
-    const ownerWaId = message?.from;
-    const text = message?.text?.body;
+    const ownerWaId = req.body?.From;
+    const text = req.body?.Body;
 
     if (!ownerWaId || !text) {
       return;
     }
 
-    const parsed = parseUdhaarMessage(text);
-    if (!parsed) {
+    const parsed = await extractTransaction(text);
+    if (parsed.type === "unknown") {
       return;
     }
 
-    await logUdhaar({
+    if (parsed.type === "udhaar") {
+      await logUdhaar({
+        customerName: parsed.customerName,
+        amount: parsed.amount,
+      });
+
+      const replyText = `✅ ${parsed.customerName} ka ₹${parsed.amount} udhaar logged!`;
+      await sendTextMessage({
+        to: ownerWaId,
+        text: replyText,
+      });
+      return;
+    }
+
+    await logWapas({
       customerName: parsed.customerName,
       amount: parsed.amount,
     });
 
-    const replyText = `✅ ${parsed.customerName} ka ₹${parsed.amount} udhaar logged!`;
+    const replyText = `✅ ${parsed.customerName} ka ₹${parsed.amount} wapas logged!`;
     await sendTextMessage({
       to: ownerWaId,
       text: replyText,
