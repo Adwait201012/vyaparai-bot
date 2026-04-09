@@ -2,7 +2,7 @@ const Groq = require("groq-sdk");
 const env = require("../config/env");
 
 const SYSTEM_PROMPT =
-  "You are a kirana store assistant. Classify the message intent into one of these: LOG_UDHAAR, CHECK_UDHAAR, LOG_WAPAS, TODAY_HISAAB, SABKA_UDHAAR, SAVE_NUMBER, SEND_REMINDER, UNKNOWN. Also extract relevant data like customerName, amount, phoneNumber. Reply ONLY in JSON like: {intent: 'LOG_UDHAAR', customerName: 'Sharma ji', amount: 500}";
+  "You are KiranaAI, a smart assistant for Indian kirana store owners. Detect the language of the message (Hindi, Hinglish, or English) and always reply in the same language. Classify intent into: LOG_UDHAAR, CHECK_UDHAAR, LOG_WAPAS, TODAY_HISAAB, SABKA_UDHAAR, SAVE_NUMBER, SEND_REMINDER, UNKNOWN. Extract customerName, amount, phoneNumber where relevant. Reply ONLY in JSON: {intent: 'LOG_UDHAAR', customerName: 'Sharma ji', amount: 500, language: 'hindi'}";
 
 const client = new Groq({ apiKey: env.groqApiKey });
 
@@ -25,6 +25,7 @@ function getJsonObjectText(rawText) {
 function fallbackIntent() {
   return {
     intent: "UNKNOWN",
+    language: "hinglish",
   };
 }
 
@@ -38,6 +39,7 @@ const ALLOWED_INTENTS = new Set([
   "SEND_REMINDER",
   "UNKNOWN",
 ]);
+const ALLOWED_LANGUAGES = new Set(["hindi", "hinglish", "english"]);
 
 async function detectIntent(messageText) {
   const completion = await client.chat.completions.create({
@@ -79,12 +81,14 @@ async function detectIntent(messageText) {
   const customerName = String(parsed.customerName || "").trim();
   const phoneNumber = String(parsed.phoneNumber || "").trim();
   const amount = Number(parsed.amount);
+  const language = String(parsed.language || "hinglish").toLowerCase().trim();
 
   return {
     intent,
     customerName,
     phoneNumber,
     amount: Number.isFinite(amount) ? amount : null,
+    language: ALLOWED_LANGUAGES.has(language) ? language : "hinglish",
   };
 }
 

@@ -14,6 +14,14 @@ const verifyWebhook = (req, res) => {
   res.status(200).send("Twilio webhook is active");
 };
 
+function normalizeLanguage(language) {
+  const lang = String(language || "").toLowerCase().trim();
+  if (lang === "hindi" || lang === "hinglish" || lang === "english") {
+    return lang;
+  }
+  return "hinglish";
+}
+
 function formatAmount(value) {
   const numberValue = Number(value || 0);
   return Number.isInteger(numberValue)
@@ -34,13 +42,77 @@ function normalizeCustomerPhone(phone) {
   return `+${digits}`;
 }
 
-async function handleTodayHisaab({ ownerWaId }) {
+function buildText(language, key, params = {}) {
+  const lang = normalizeLanguage(language);
+  const p = params;
+
+  const templates = {
+    hindi: {
+      TODAY_HISAAB: `आज का हिसाब:\nनया उधार: ₹${p.newUdhaar}\nवापस मिला: ₹${p.wapasReceived}\nनेट उधार आज: ₹${p.netUdhaar}`,
+      NO_PENDING_ALL: "सभी का उधार:\nकोई पेंडिंग उधार नहीं है।\nकुल: Rs0",
+      ALL_UDHAAR: `सभी का उधार:\n${p.lines}\nकुल: Rs${p.total}`,
+      SAVE_NUMBER_ERROR: "कस्टमर का नाम या फोन नंबर समझ नहीं आया।",
+      SAVE_NUMBER_OK: `${p.customerName} का नंबर सेव हो गया।`,
+      REMINDER_NAME_ERROR: "किस कस्टमर को रिमाइंडर भेजना है, समझ नहीं आया।",
+      REMINDER_NO_PHONE: `${p.customerName} का नंबर नहीं मिला। पहले "${p.customerName} number 9876543210" भेजें।`,
+      REMINDER_CUSTOMER: `नमस्ते ${p.customerName} जी! आपका हमारे शॉप में ₹${p.amount} उधार बाकी है। कृपया जल्द चुकता करें। धन्यवाद!`,
+      REMINDER_OWNER_OK: `${p.customerName} को रिमाइंडर भेज दिया गया।`,
+      CHECK_NAME_ERROR: "कस्टमर का नाम समझ नहीं आया।",
+      CHECK_OK: `${p.customerName} का कुल उधार: ₹${p.amount} है`,
+      WAPAS_ERROR: "वापस एंट्री के लिए नाम या अमाउंट क्लियर नहीं है।",
+      WAPAS_OK: `${p.customerName} ने ₹${p.amount} वापस दिया। बाकी उधार: ₹${p.remaining}`,
+      UDHAAR_ERROR: "उधार एंट्री के लिए नाम या अमाउंट क्लियर नहीं है।",
+      UDHAAR_OK: `${p.customerName} का ₹${p.amount} उधार लॉग हो गया!`,
+      UNKNOWN: "मैसेज समझ नहीं आया। कृपया फिर से लिखें।",
+    },
+    hinglish: {
+      TODAY_HISAAB: `Aaj ka hisaab:\nNaya udhaar: ₹${p.newUdhaar}\nWapas mila: ₹${p.wapasReceived}\nNet udhaar aaj: ₹${p.netUdhaar}`,
+      NO_PENDING_ALL: "Sabka udhaar:\nKoi pending udhaar nahi hai.\nTotal: Rs0",
+      ALL_UDHAAR: `Sabka udhaar:\n${p.lines}\nTotal: Rs${p.total}`,
+      SAVE_NUMBER_ERROR: "Customer name ya phone number samajh nahi aaya.",
+      SAVE_NUMBER_OK: `${p.customerName} ka number save ho gaya.`,
+      REMINDER_NAME_ERROR: "Kis customer ko reminder bhejna hai, samajh nahi aaya.",
+      REMINDER_NO_PHONE: `${p.customerName} ka number nahi mila. Pehle "${p.customerName} number 9876543210" bhejein.`,
+      REMINDER_CUSTOMER: `Namaste ${p.customerName} ji! Aapka hamare shop mein ₹${p.amount} udhaar baaki hai. Kripya jald chukta karein. Dhanyawad!`,
+      REMINDER_OWNER_OK: `${p.customerName} ko reminder bhej diya gaya.`,
+      CHECK_NAME_ERROR: "Customer ka naam samajh nahi aaya.",
+      CHECK_OK: `${p.customerName} ka kul udhaar: ₹${p.amount} hai`,
+      WAPAS_ERROR: "Wapas entry ke liye naam ya amount clear nahi hai.",
+      WAPAS_OK: `${p.customerName} ne ₹${p.amount} wapas diya. Baaki udhaar: ₹${p.remaining}`,
+      UDHAAR_ERROR: "Udhaar entry ke liye naam ya amount clear nahi hai.",
+      UDHAAR_OK: `${p.customerName} ka ₹${p.amount} udhaar logged!`,
+      UNKNOWN: "Message samajh nahi aaya. Please dobara bhejein.",
+    },
+    english: {
+      TODAY_HISAAB: `Today's summary:\nNew udhaar: ₹${p.newUdhaar}\nRepayment received: ₹${p.wapasReceived}\nNet udhaar today: ₹${p.netUdhaar}`,
+      NO_PENDING_ALL: "All udhaar:\nNo pending udhaar.\nTotal: Rs0",
+      ALL_UDHAAR: `All udhaar:\n${p.lines}\nTotal: Rs${p.total}`,
+      SAVE_NUMBER_ERROR: "Could not understand customer name or phone number.",
+      SAVE_NUMBER_OK: `${p.customerName}'s number has been saved.`,
+      REMINDER_NAME_ERROR: "Could not understand which customer to remind.",
+      REMINDER_NO_PHONE: `No number found for ${p.customerName}. First send "${p.customerName} number 9876543210".`,
+      REMINDER_CUSTOMER: `Namaste ${p.customerName} ji! You have ₹${p.amount} udhaar pending at our shop. Please clear it soon. Thank you!`,
+      REMINDER_OWNER_OK: `Reminder sent to ${p.customerName}.`,
+      CHECK_NAME_ERROR: "Could not understand customer name.",
+      CHECK_OK: `${p.customerName}'s total udhaar is ₹${p.amount}`,
+      WAPAS_ERROR: "Name or amount is unclear for repayment entry.",
+      WAPAS_OK: `${p.customerName} paid back ₹${p.amount}. Remaining udhaar: ₹${p.remaining}`,
+      UDHAAR_ERROR: "Name or amount is unclear for udhaar entry.",
+      UDHAAR_OK: `₹${p.amount} udhaar logged for ${p.customerName}.`,
+      UNKNOWN: "Could not understand the message. Please try again.",
+    },
+  };
+
+  return templates[lang][key] || templates.hinglish.UNKNOWN;
+}
+
+async function handleTodayHisaab({ ownerWaId, language }) {
   const today = await getTodayHisaab();
-  const replyText =
-    `Aaj ka hisaab:\n` +
-    `Naya udhaar: ₹${formatAmount(today.newUdhaar)}\n` +
-    `Wapas mila: ₹${formatAmount(today.wapasReceived)}\n` +
-    `Net udhaar aaj: ₹${formatAmount(today.netUdhaar)}`;
+  const replyText = buildText(language, "TODAY_HISAAB", {
+    newUdhaar: formatAmount(today.newUdhaar),
+    wapasReceived: formatAmount(today.wapasReceived),
+    netUdhaar: formatAmount(today.netUdhaar),
+  });
 
   await sendTextMessage({
     to: ownerWaId,
@@ -65,9 +137,10 @@ async function receiveWebhook(req, res) {
     const customerName = (aiResult.customerName || "").trim();
     const amount = Number(aiResult.amount);
     const phoneNumber = (aiResult.phoneNumber || "").trim();
+    const language = normalizeLanguage(aiResult.language);
 
     if (intent === "TODAY_HISAAB") {
-      await handleTodayHisaab({ ownerWaId });
+      await handleTodayHisaab({ ownerWaId, language });
       return;
     }
 
@@ -77,7 +150,7 @@ async function receiveWebhook(req, res) {
       if (!result.customers.length) {
         await sendTextMessage({
           to: ownerWaId,
-          text: "Sabka udhaar:\nKoi pending udhaar nahi hai.\nTotal: Rs0",
+          text: buildText(language, "NO_PENDING_ALL"),
         });
         return;
       }
@@ -86,9 +159,10 @@ async function receiveWebhook(req, res) {
         (item) => `${item.customerName}: Rs${formatAmount(item.total)}`,
       );
       const replyText =
-        `Sabka udhaar:\n` +
-        `${lines.join("\n")}\n` +
-        `Total: Rs${formatAmount(result.grandTotal)}`;
+        buildText(language, "ALL_UDHAAR", {
+          lines: lines.join("\n"),
+          total: formatAmount(result.grandTotal),
+        });
 
       await sendTextMessage({ to: ownerWaId, text: replyText });
       return;
@@ -98,7 +172,7 @@ async function receiveWebhook(req, res) {
       if (!customerName || !phoneNumber) {
         await sendTextMessage({
           to: ownerWaId,
-          text: "Customer name ya phone number samajh nahi aaya.",
+          text: buildText(language, "SAVE_NUMBER_ERROR"),
         });
         return;
       }
@@ -109,7 +183,7 @@ async function receiveWebhook(req, res) {
       });
       await sendTextMessage({
         to: ownerWaId,
-        text: `${customerName} ka number save ho gaya.`,
+        text: buildText(language, "SAVE_NUMBER_OK", { customerName }),
       });
       return;
     }
@@ -118,7 +192,7 @@ async function receiveWebhook(req, res) {
       if (!customerName) {
         await sendTextMessage({
           to: ownerWaId,
-          text: "Kis customer ko reminder bhejna hai, samajh nahi aaya.",
+          text: buildText(language, "REMINDER_NAME_ERROR"),
         });
         return;
       }
@@ -127,21 +201,21 @@ async function receiveWebhook(req, res) {
       if (!customerPhone) {
         await sendTextMessage({
           to: ownerWaId,
-          text: `${customerName} ka number nahi mila. Pehle "${customerName} number 9876543210" bhejein.`,
+          text: buildText(language, "REMINDER_NO_PHONE", { customerName }),
         });
         return;
       }
 
       const total = await getCustomerUdhaarTotal({ customerName });
-      const reminderText =
-        `Namaste ${customerName} ji! ` +
-        `Aapka hamare shop mein ₹${formatAmount(total)} udhaar baaki hai. ` +
-        `Kripya jald chukta karein. Dhanyawad!`;
+      const reminderText = buildText(language, "REMINDER_CUSTOMER", {
+        customerName,
+        amount: formatAmount(total),
+      });
 
       await sendTextMessage({ to: customerPhone, text: reminderText });
       await sendTextMessage({
         to: ownerWaId,
-        text: `${customerName} ko reminder bhej diya gaya.`,
+        text: buildText(language, "REMINDER_OWNER_OK", { customerName }),
       });
       return;
     }
@@ -150,7 +224,7 @@ async function receiveWebhook(req, res) {
       if (!customerName) {
         await sendTextMessage({
           to: ownerWaId,
-          text: "Customer ka naam samajh nahi aaya.",
+          text: buildText(language, "CHECK_NAME_ERROR"),
         });
         return;
       }
@@ -158,7 +232,10 @@ async function receiveWebhook(req, res) {
       const total = await getCustomerUdhaarTotal({ customerName });
       await sendTextMessage({
         to: ownerWaId,
-        text: `${customerName} ka kul udhaar: ₹${formatAmount(total)} hai`,
+        text: buildText(language, "CHECK_OK", {
+          customerName,
+          amount: formatAmount(total),
+        }),
       });
       return;
     }
@@ -167,7 +244,7 @@ async function receiveWebhook(req, res) {
       if (!customerName || !Number.isFinite(amount) || amount <= 0) {
         await sendTextMessage({
           to: ownerWaId,
-          text: "Wapas entry ke liye naam ya amount clear nahi hai.",
+          text: buildText(language, "WAPAS_ERROR"),
         });
         return;
       }
@@ -176,7 +253,11 @@ async function receiveWebhook(req, res) {
       const remainingTotal = await getCustomerUdhaarTotal({ customerName });
       await sendTextMessage({
         to: ownerWaId,
-        text: `${customerName} ne ₹${formatAmount(amount)} wapas diya. Baaki udhaar: ₹${formatAmount(remainingTotal)}`,
+        text: buildText(language, "WAPAS_OK", {
+          customerName,
+          amount: formatAmount(amount),
+          remaining: formatAmount(remainingTotal),
+        }),
       });
       return;
     }
@@ -185,7 +266,7 @@ async function receiveWebhook(req, res) {
       if (!customerName || !Number.isFinite(amount) || amount <= 0) {
         await sendTextMessage({
           to: ownerWaId,
-          text: "Udhaar entry ke liye naam ya amount clear nahi hai.",
+          text: buildText(language, "UDHAAR_ERROR"),
         });
         return;
       }
@@ -193,10 +274,18 @@ async function receiveWebhook(req, res) {
       await logUdhaar({ customerName, amount });
       await sendTextMessage({
         to: ownerWaId,
-        text: `${customerName} ka ₹${formatAmount(amount)} udhaar logged!`,
+        text: buildText(language, "UDHAAR_OK", {
+          customerName,
+          amount: formatAmount(amount),
+        }),
       });
       return;
     }
+
+    await sendTextMessage({
+      to: ownerWaId,
+      text: buildText(language, "UNKNOWN"),
+    });
   } catch (error) {
     console.error("Webhook processing error:", error.message);
   }
