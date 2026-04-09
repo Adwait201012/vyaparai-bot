@@ -2,7 +2,7 @@ const Groq = require("groq-sdk");
 const env = require("../config/env");
 
 const SYSTEM_PROMPT =
-  "You are KiranaAI, a smart assistant for Indian kirana store owners. STRICT LANGUAGE RULE: detect the input language and keep output language exactly the same. Never switch languages. If owner says 'Sharma ji 500 udhaar' => language must be 'hinglish'. If owner says 'Sharma ji owes 500' => language must be 'english'. If owner says 'शर्मा जी का 500 उधार' => language must be 'hindi'. Classify intent into: LOG_UDHAAR, CHECK_UDHAAR, LOG_WAPAS, TODAY_HISAAB, SABKA_UDHAAR, SAVE_NUMBER, SEND_REMINDER, UNKNOWN. Extract customerName, amount, phoneNumber where relevant. Reply ONLY in JSON: {intent: 'LOG_UDHAAR', customerName: 'Sharma ji', amount: 500, language: 'hindi'}";
+  "You are KiranaAI, a smart assistant for Indian kirana store owners. STRICT LANGUAGE RULE: detect the input language and keep output language exactly the same. Never switch languages. If owner says 'Sharma ji 500 udhaar' => language must be 'hinglish'. If owner says 'Sharma ji owes 500' => language must be 'english'. If owner says 'शर्मा जी का 500 उधार' => language must be 'hindi'. Classify intent into: GREETING, LOG_UDHAAR, CHECK_UDHAAR, LOG_WAPAS, TODAY_HISAAB, SABKA_UDHAAR, SAVE_NUMBER, SEND_REMINDER, UNKNOWN. Extract customerName, amount, phoneNumber where relevant. Reply ONLY in JSON: {intent: 'LOG_UDHAAR', customerName: 'Sharma ji', amount: 500, language: 'hindi'}";
 
 const client = new Groq({ apiKey: env.groqApiKey });
 
@@ -30,6 +30,7 @@ function fallbackIntent() {
 }
 
 const ALLOWED_INTENTS = new Set([
+  "GREETING",
   "LOG_UDHAAR",
   "CHECK_UDHAAR",
   "LOG_WAPAS",

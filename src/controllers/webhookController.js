@@ -52,6 +52,19 @@ function buildText(language, key, params = {}) {
 
   const templates = {
     hindi: {
+      GREETING_INTRO:
+        "नमस्ते! मैं KiranaAI हूं, आपका स्मार्ट किराना असिस्टेंट! 🤖\n" +
+        "मैं आपकी इन चीजों में मदद कर सकता हूं:\n\n" +
+        "उधार लॉग - 'शर्मा जी 500 उधार'\n" +
+        "उधार चेक - 'शर्मा जी कितना उधार'\n" +
+        "पेमेंट रिसीव्ड - 'शर्मा जी 200 वापस'\n" +
+        "आज का हिसाब - 'आज का हिसाब'\n" +
+        "सबका उधार - 'सबका उधार दिखाओ'\n" +
+        "कस्टमर नंबर सेव - 'शर्मा जी number 9876543210'\n" +
+        "कस्टमर रिमाइंडर - 'शर्मा जी को remind करो'\n" +
+        "वॉइस मैसेज - कुछ भी बोलकर भेजिए, मैं समझ जाऊंगा!\n\n" +
+        "हिंग्लिश, हिंदी या अंग्रेज़ी - जो भी आपको आरामदायक लगे!\n" +
+        "चलिए शुरू करते हैं! 💪",
       TODAY_HISAAB: `आज का हिसाब:\nनया उधार: ₹${p.newUdhaar}\nवापस मिला: ₹${p.wapasReceived}\nनेट उधार आज: ₹${p.netUdhaar}`,
       NO_PENDING_ALL: "सभी का उधार:\nकोई पेंडिंग उधार नहीं है।\nकुल: Rs0",
       ALL_UDHAAR: `सभी का उधार:\n${p.lines}\nकुल: Rs${p.total}`,
@@ -70,6 +83,19 @@ function buildText(language, key, params = {}) {
       UNKNOWN: "मैसेज समझ नहीं आया। कृपया फिर से लिखें।",
     },
     hinglish: {
+      GREETING_INTRO:
+        "Namaste! Main KiranaAI hun, aapka smart kirana assistant! 🤖\n" +
+        "Main aapki in cheezon mein help kar sakta hun:\n\n" +
+        "Udhaar Log - 'Sharma ji 500 udhaar'\n" +
+        "Udhaar Check - 'Sharma ji kitna udhaar'\n" +
+        "Payment Received - 'Sharma ji 200 wapas'\n" +
+        "Aaj Ka Hisaab - 'aaj ka hisaab'\n" +
+        "Sabka Udhaar - 'sabka udhaar dikhao'\n" +
+        "Customer Number Save - 'Sharma ji number 9876543210'\n" +
+        "Customer Reminder - 'Sharma ji ko remind karo'\n" +
+        "Voice Messages - Kuch bhi bolke bhejo, main samjhunga!\n\n" +
+        "Hinglish, Hindi ya English - jo bhi aapko comfortable lage!\n" +
+        "Chalo shuru karte hain! 💪",
       TODAY_HISAAB: `Aaj ka hisaab:\nNaya udhaar: ₹${p.newUdhaar}\nWapas mila: ₹${p.wapasReceived}\nNet udhaar aaj: ₹${p.netUdhaar}`,
       NO_PENDING_ALL: "Sabka udhaar:\nKoi pending udhaar nahi hai.\nTotal: Rs0",
       ALL_UDHAAR: `Sabka udhaar:\n${p.lines}\nTotal: Rs${p.total}`,
@@ -88,6 +114,19 @@ function buildText(language, key, params = {}) {
       UNKNOWN: "Message samajh nahi aaya. Please dobara bhejein.",
     },
     english: {
+      GREETING_INTRO:
+        "Hello! I am KiranaAI, your smart kirana assistant! 🤖\n" +
+        "I can help you with:\n\n" +
+        "Log Udhaar - 'Sharma ji owes 500'\n" +
+        "Check Udhaar - 'How much udhaar for Sharma ji?'\n" +
+        "Payment Received - 'Sharma ji paid 200'\n" +
+        "Today's Summary - 'today report'\n" +
+        "All Pending Udhaar - 'show all udhaar'\n" +
+        "Save Customer Number - 'Sharma ji number 9876543210'\n" +
+        "Send Reminder - 'remind Sharma ji'\n" +
+        "Voice Messages - Send voice notes, I will understand!\n\n" +
+        "Use Hinglish, Hindi, or English - as you prefer!\n" +
+        "Let's get started! 💪",
       TODAY_HISAAB: `Today's summary:\nNew udhaar: ₹${p.newUdhaar}\nRepayment received: ₹${p.wapasReceived}\nNet udhaar today: ₹${p.netUdhaar}`,
       NO_PENDING_ALL: "All udhaar:\nNo pending udhaar.\nTotal: Rs0",
       ALL_UDHAAR: `All udhaar:\n${p.lines}\nTotal: Rs${p.total}`,
@@ -154,6 +193,14 @@ async function receiveWebhook(req, res) {
     const amount = Number(aiResult.amount);
     const phoneNumber = (aiResult.phoneNumber || "").trim();
     const language = normalizeLanguage(aiResult.language);
+
+    if (intent === "GREETING") {
+      await sendTextMessage({
+        to: ownerWaId,
+        text: buildText(language, "GREETING_INTRO"),
+      });
+      return;
+    }
 
     if (intent === "TODAY_HISAAB") {
       await handleTodayHisaab({ ownerWaId, language });
