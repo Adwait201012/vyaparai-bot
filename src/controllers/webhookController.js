@@ -3,6 +3,7 @@ const {
   logUdhaar,
   logWapas,
   getCustomerUdhaarTotal,
+  getTodayHisaab,
 } = require("../services/udhaarService");
 const { sendTextMessage } = require("../services/whatsappService");
 
@@ -55,6 +56,15 @@ function parseWapasMessage(text) {
   return null;
 }
 
+function isTodayHisaabQuery(text) {
+  const cleaned = String(text || "").trim().toLowerCase().replace(/\s+/g, " ");
+  return cleaned === "aaj ka hisaab";
+}
+
+function formatAmount(value) {
+  return Number.isInteger(value) ? String(value) : value.toFixed(2);
+}
+
 async function receiveWebhook(req, res) {
   // Twilio expects quick 200 response to acknowledge webhook.
   res.status(200).send("ok");
@@ -64,6 +74,20 @@ async function receiveWebhook(req, res) {
     const text = req.body?.Body;
 
     if (!ownerWaId || !text) {
+      return;
+    }
+
+    if (isTodayHisaabQuery(text)) {
+      const today = await getTodayHisaab();
+      const replyText =
+        `📊 Aaj ka hisaab:\n` +
+        `💰 Naya udhaar: ₹${formatAmount(today.newUdhaar)}\n` +
+        `✅ Wapas mila: ₹${formatAmount(today.wapasReceived)}\n` +
+        `📌 Net udhaar aaj: ₹${formatAmount(today.netUdhaar)}`;
+      await sendTextMessage({
+        to: ownerWaId,
+        text: replyText,
+      });
       return;
     }
 

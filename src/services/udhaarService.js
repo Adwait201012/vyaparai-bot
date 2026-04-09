@@ -52,4 +52,40 @@ async function getCustomerUdhaarTotal({ customerName }) {
   return total;
 }
 
-module.exports = { logUdhaar, logWapas, getCustomerUdhaarTotal };
+async function getTodayHisaab() {
+  const now = new Date();
+  const startOfDay = new Date(now);
+  startOfDay.setHours(0, 0, 0, 0);
+
+  const endOfDay = new Date(now);
+  endOfDay.setHours(23, 59, 59, 999);
+
+  const { data, error } = await supabase
+    .from("udhaar_logs")
+    .select("amount,created_at")
+    .gte("created_at", startOfDay.toISOString())
+    .lte("created_at", endOfDay.toISOString());
+
+  if (error) {
+    throw new Error(`Supabase fetch failed: ${error.message}`);
+  }
+
+  const rows = data || [];
+  const newUdhaar = rows
+    .filter((row) => Number(row.amount || 0) > 0)
+    .reduce((sum, row) => sum + Number(row.amount || 0), 0);
+
+  const wapasReceived = rows
+    .filter((row) => Number(row.amount || 0) < 0)
+    .reduce((sum, row) => sum + Math.abs(Number(row.amount || 0)), 0);
+
+  const netUdhaar = newUdhaar - wapasReceived;
+
+  return {
+    newUdhaar,
+    wapasReceived,
+    netUdhaar,
+  };
+}
+
+module.exports = { logUdhaar, logWapas, getCustomerUdhaarTotal, getTodayHisaab };
