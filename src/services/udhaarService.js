@@ -38,4 +38,18 @@ async function logWapas({ customerName, amount }) {
   return data;
 }
 
-module.exports = { logUdhaar, logWapas };
+async function getCustomerUdhaarTotal({ customerName }) {
+  const { data, error } = await supabase
+    .from("udhaar_logs")
+    .select("amount")
+    .ilike("customer_name", customerName);
+
+  if (error) {
+    throw new Error(`Supabase fetch failed: ${error.message}`);
+  }
+
+  const total = (data || []).reduce((sum, row) => sum + Number(row.amount || 0), 0);
+  return total;
+}
+
+module.exports = { logUdhaar, logWapas, getCustomerUdhaarTotal };
