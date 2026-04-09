@@ -2,7 +2,7 @@ const Groq = require("groq-sdk");
 const env = require("../config/env");
 
 const SYSTEM_PROMPT =
-  "You are a kirana store assistant. Extract customer name and amount from the message. Reply ONLY in JSON like this: {customerName: 'Sharma ji', amount: 500, type: 'udhaar'} or {customerName: 'Sharma ji', amount: 200, type: 'wapas'} or {type: 'unknown'} if not relevant";
+  "You are a kirana store assistant. Classify the message intent into one of these: LOG_UDHAAR, CHECK_UDHAAR, LOG_WAPAS, TODAY_HISAAB, SABKA_UDHAAR, SAVE_NUMBER, SEND_REMINDER, UNKNOWN. Also extract relevant data like customerName, amount, phoneNumber. Reply ONLY in JSON like: {intent: 'LOG_UDHAAR', customerName: 'Sharma ji', amount: 500}";
 
 const client = new Groq({ apiKey: env.groqApiKey });
 
@@ -22,25 +22,24 @@ function getJsonObjectText(rawText) {
   return rawText.slice(firstBrace, lastBrace + 1);
 }
 
-function fallbackExtract(messageText) {
-  const cleaned = String(messageText || "").trim().replace(/\s+/g, " ");
-  const match = cleaned.match(/^(.+?)\s+(\d+(?:\.\d+)?)\s+(udhaar|wapas)$/i);
-  if (!match) {
-    return { type: "unknown" };
-  }
-
-  const customerName = match[1].trim();
-  const amount = Number(match[2]);
-  const type = match[3].toLowerCase();
-
-  if (!customerName || Number.isNaN(amount) || amount <= 0) {
-    return { type: "unknown" };
-  }
-
-  return { customerName, amount, type };
+function fallbackIntent() {
+  return {
+    intent: "UNKNOWN",
+  };
 }
 
-async function extractTransaction(messageText) {
+const ALLOWED_INTENTS = new Set([
+  "LOG_UDHAAR",
+  "CHECK_UDHAAR",
+  "LOG_WAPAS",
+  "TODAY_HISAAB",
+  "SABKA_UDHAAR",
+  "SAVE_NUMBER",
+  "SEND_REMINDER",
+  "UNKNOWN",
+]);
+
+async function detectIntent(messageText) {
   const completion = await client.chat.completions.create({
     model: "llama-3.1-8b-instant",
     temperature: 0,
@@ -65,25 +64,28 @@ async function extractTransaction(messageText) {
   try {
     parsed = JSON.parse(normalized);
   } catch {
-    return fallbackExtract(messageText);
+    return fallbackIntent();
   }
 
   if (!parsed || typeof parsed !== "object") {
-    return { type: "unknown" };
+    return fallbackIntent();
   }
 
-  if (parsed.type === "udhaar" || parsed.type === "wapas") {
-    const customerName = String(parsed.customerName || "").trim();
-    const amount = Number(parsed.amount);
-
-    if (!customerName || Number.isNaN(amount) || amount <= 0) {
-      return fallbackExtract(messageText);
-    }
-
-    return { customerName, amount, type: parsed.type };
+  const intent = String(parsed.intent || "UNKNOWN").toUpperCase().trim();
+  if (!ALLOWED_INTENTS.has(intent)) {
+    return fallbackIntent();
   }
 
-  return fallbackExtract(messageText);
+  const customerName = String(parsed.customerName || "").trim();
+  const phoneNumber = String(parsed.phoneNumber || "").trim();
+  const amount = Number(parsed.amount);
+
+  return {
+    intent,
+    customerName,
+    phoneNumber,
+    amount: Number.isFinite(amount) ? amount : null,
+  };
 }
 
-module.exports = { extractTransaction };
+module.exports = { detectIntent };
