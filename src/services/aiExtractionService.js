@@ -2,7 +2,7 @@ const Groq = require("groq-sdk");
 const env = require("../config/env");
 
 const SYSTEM_PROMPT =
-  "You are VyaparAI, a smart assistant for Indian kirana store owners. STRICT LANGUAGE RULE: Detect the language of the input message. If input is pure English (like 'Sharma ji owes 500' or 'hello'), reply ONLY in English. If input is pure Hindi (like 'शर्मा जी का उधार'), reply ONLY in Hindi. If input is Hinglish (like 'Sharma ji 500 udhaar' or 'namaste'), reply ONLY in Hinglish. NEVER mix languages. The reply language must be 100% identical to input language. Classify intent into: GREETING, LOG_UDHAAR, CHECK_UDHAAR, LOG_WAPAS, TODAY_HISAAB, SABKA_UDHAAR, SAVE_NUMBER, SEND_REMINDER, INVENTORY_ADD, CHECK_STOCK, ALL_STOCK, UNKNOWN. Inventory examples: 'chawal 50kg aaya', 'maggi 100 packet aaya' => INVENTORY_ADD with itemName, quantity, unit. 'chawal stock kitna hai' => CHECK_STOCK with itemName. 'sabka stock dikhao' => ALL_STOCK. Extract customerName, amount, phoneNumber, itemName, quantity, unit where relevant. Reply ONLY in JSON: {intent: 'LOG_UDHAAR', customerName: 'Sharma ji', amount: 500, language: 'hindi'}";
+  "Classify the user message into one intent from: GREETING, LOG_UDHAAR, CHECK_UDHAAR, LOG_WAPAS, TODAY_HISAAB, SABKA_UDHAAR, SAVE_NUMBER, SEND_REMINDER, INVENTORY_ADD, CHECK_STOCK, ALL_STOCK, UNKNOWN. Return ONLY JSON with keys: intent, customerName, amount, phoneNumber, itemName, quantity, unit. Focus on extracting itemName, quantity, unit for inventory messages.";
 
 const client = new Groq({ apiKey: env.groqApiKey });
 
@@ -94,6 +94,69 @@ function detectLanguageFromText(messageText) {
   return "english";
 }
 
+function parseNumberAndUnit(text) {
+  const compact = text.match(/(\d+(?:\.\d+)?)\s*(kg|g|gm|gram|grams|ltr|l|ml|packet|packets|pcs|pc|piece|pieces|dozen|box|boxes)?/i);
+  if (!compact) {
+    return { quantity: null, unit: "" };
+  }
+
+  const quantity = Number(compact[1]);
+  const unit = String(compact[2] || "").toLowerCase();
+  return {
+    quantity: Number.isFinite(quantity) ? quantity : null,
+    unit,
+  };
+}
+
+function cleanupItemName(raw) {
+  const text = String(raw || "")
+    .toLowerCase()
+    .replace(/\b(aaj|today|got|received|added|add|aaya|aayi|aaye|inventory|stock|mein|me|ko|hai|kitna|kitni|dikhao|show|all|sabka|sabhi|ka|ki)\b/g, " ")
+    .replace(/\d+(?:\.\d+)?\s*(kg|g|gm|gram|grams|ltr|l|ml|packet|packets|pcs|pc|piece|pieces|dozen|box|boxes)?/gi, " ")
+    .replace(/[^\p{L}\s]/gu, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+  return text;
+}
+
+function inferInventoryFromText(messageText) {
+  const raw = String(messageText || "").trim();
+  const lower = raw.toLowerCase();
+
+  const isAllStock =
+    /(^|\s)(sabka stock|sabhi stock|all stock|show all stock|stock dikhao|inventory dikhao)(\s|$)/i.test(
+      lower,
+    );
+  if (isAllStock) {
+    return { intent: "ALL_STOCK" };
+  }
+
+  const isStockQuery =
+    /stock/.test(lower) && /(kitna|kitni|how much|quantity|hai|\?)/.test(lower);
+  if (isStockQuery) {
+    return {
+      intent: "CHECK_STOCK",
+      itemName: cleanupItemName(raw),
+    };
+  }
+
+  const isInventoryAdd =
+    /(aaya|aayi|aaye|got|received|added)/.test(lower) &&
+    /\d/.test(lower);
+  if (!isInventoryAdd) {
+    return {};
+  }
+
+  const { quantity, unit } = parseNumberAndUnit(lower);
+  const itemName = cleanupItemName(raw);
+  return {
+    intent: "INVENTORY_ADD",
+    itemName,
+    quantity,
+    unit,
+  };
+}
+
 async function detectIntent(messageText) {
   const completion = await client.chat.completions.create({
     model: "llama-3.1-8b-instant",
@@ -140,14 +203,22 @@ async function detectIntent(messageText) {
   const modelLanguage = String(parsed.language || "hinglish").toLowerCase().trim();
   const strictLanguage = detectLanguageFromText(messageText);
 
+  const inventoryFallback = inferInventoryFromText(messageText);
+  const finalIntent = inventoryFallback.intent || intent;
+  const finalItemName = inventoryFallback.itemName || itemName;
+  const finalQuantity = Number.isFinite(inventoryFallback.quantity)
+    ? inventoryFallback.quantity
+    : quantity;
+  const finalUnit = inventoryFallback.unit || unit;
+
   return {
-    intent,
+    intent: finalIntent,
     customerName,
     phoneNumber,
     amount: Number.isFinite(amount) ? amount : null,
-    itemName,
-    quantity: Number.isFinite(quantity) ? quantity : null,
-    unit,
+    itemName: finalItemName,
+    quantity: Number.isFinite(finalQuantity) ? finalQuantity : null,
+    unit: finalUnit,
     // Enforce language based on input text so replies always match user language.
     language: ALLOWED_LANGUAGES.has(strictLanguage)
       ? strictLanguage

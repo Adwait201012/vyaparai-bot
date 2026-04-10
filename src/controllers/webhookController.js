@@ -58,32 +58,17 @@ function buildText(language, key, params = {}) {
 
   const templates = {
     hindi: {
-      GREETING_INTRO:
-        "नमस्ते! मैं VyaparAI हूं, आपका स्मार्ट किराना असिस्टेंट! 🤖\n" +
-        "मैं आपकी इन चीजों में मदद कर सकता हूं:\n\n" +
-        "उधार लॉग - 'शर्मा जी 500 उधार'\n" +
-        "उधार चेक - 'शर्मा जी कितना उधार'\n" +
-        "पेमेंट रिसीव्ड - 'शर्मा जी 200 वापस'\n" +
-        "आज का हिसाब - 'आज का हिसाब'\n" +
-        "सबका उधार - 'सबका उधार दिखाओ'\n" +
-        "इन्वेंटरी जोड़ें - 'चावल 50kg आया'\n" +
-        "स्टॉक चेक - 'चावल स्टॉक कितना है'\n" +
-        "सारा स्टॉक - 'सभी का स्टॉक दिखाओ'\n" +
-        "कस्टमर नंबर सेव - 'शर्मा जी number 9876543210'\n" +
-        "कस्टमर रिमाइंडर - 'शर्मा जी को remind करो'\n" +
-        "वॉइस मैसेज - कुछ भी बोलकर भेजिए, मैं समझ जाऊंगा!\n\n" +
-        "हिंदी, हिंग्लिश या अंग्रेज़ी - जो भाषा लिखेंगे, उसी में जवाब मिलेगा!\n" +
-        "चलिए शुरू करते हैं! 💪",
+      GREETING_INTRO: "नमस्ते! मैं VyaparAI हूं। उधार और स्टॉक दोनों मैनेज कर सकता हूं।",
       TODAY_HISAAB: `आज का हिसाब:\nनया उधार: ₹${p.newUdhaar}\nवापस मिला: ₹${p.wapasReceived}\nनेट उधार आज: ₹${p.netUdhaar}`,
       NO_PENDING_ALL: "सभी का उधार:\nकोई पेंडिंग उधार नहीं है।\nकुल: Rs0",
       ALL_UDHAAR: `सभी का उधार:\n${p.lines}\nकुल: Rs${p.total}`,
       INVENTORY_ADD_ERROR: "इन्वेंटरी जोड़ने के लिए वस्तु या मात्रा स्पष्ट नहीं है।",
-      INVENTORY_ADD_OK: `${p.itemName} ${p.quantity}${p.unitText} इन्वेंटरी में जोड़ दिया गया!`,
+      INVENTORY_ADD_OK: `${p.itemName}: ${p.quantity}${p.unitText} जोड़ दिया गया! कुल स्टॉक: ${p.totalQuantity}${p.unitText}`,
       STOCK_CHECK_ERROR: "किस वस्तु का स्टॉक देखना है, यह समझ नहीं आया।",
       STOCK_NOT_FOUND: `${p.itemName} का स्टॉक नहीं मिला।`,
-      STOCK_CHECK_OK: `${p.itemName} का वर्तमान स्टॉक: ${p.quantity}${p.unitText}`,
+      STOCK_CHECK_OK: `${p.itemName}: ${p.quantity}${p.unitText}`,
       ALL_STOCK_EMPTY: "स्टॉक लिस्ट खाली है।",
-      ALL_STOCK: `सारा स्टॉक:\n${p.lines}`,
+      ALL_STOCK: `स्टॉक:\n${p.lines}`,
       SAVE_NUMBER_ERROR: "ग्राहक का नाम या फोन नंबर समझ नहीं आया।",
       SAVE_NUMBER_OK: `${p.customerName} का नंबर सहेज दिया गया।`,
       REMINDER_NAME_ERROR: "किस ग्राहक को याद दिलाना है, यह समझ नहीं आया।",
@@ -99,32 +84,17 @@ function buildText(language, key, params = {}) {
       UNKNOWN: "मैसेज समझ नहीं आया। कृपया फिर से लिखें।",
     },
     hinglish: {
-      GREETING_INTRO:
-        "Namaste! Main VyaparAI hun, aapka smart kirana assistant! 🤖\n" +
-        "Main aapki in cheezon mein help kar sakta hun:\n\n" +
-        "Udhaar Log - 'Sharma ji 500 udhaar'\n" +
-        "Udhaar Check - 'Sharma ji kitna udhaar'\n" +
-        "Payment Received - 'Sharma ji 200 wapas'\n" +
-        "Aaj Ka Hisaab - 'aaj ka hisaab'\n" +
-        "Sabka Udhaar - 'sabka udhaar dikhao'\n" +
-        "Stock Add - 'chawal 50kg aaya'\n" +
-        "Stock Check - 'chawal stock kitna hai'\n" +
-        "All Stock - 'sabka stock dikhao'\n" +
-        "Customer Number Save - 'Sharma ji number 9876543210'\n" +
-        "Customer Reminder - 'Sharma ji ko remind karo'\n" +
-        "Voice Messages - Kuch bhi bolke bhejo, main samjhunga!\n\n" +
-        "Jo language mein message karoge, reply bhi usi language mein milega!\n" +
-        "Chalo shuru karte hain! 💪",
+      GREETING_INTRO: "Namaste! Main VyaparAI hun. Udhaar aur stock dono handle karta hun.",
       TODAY_HISAAB: `Aaj ka hisaab:\nNaya udhaar: ₹${p.newUdhaar}\nWapas mila: ₹${p.wapasReceived}\nNet udhaar aaj: ₹${p.netUdhaar}`,
       NO_PENDING_ALL: "Sabka udhaar:\nKoi pending udhaar nahi hai.\nTotal: Rs0",
       ALL_UDHAAR: `Sabka udhaar:\n${p.lines}\nTotal: Rs${p.total}`,
       INVENTORY_ADD_ERROR: "Stock entry ke liye item ya quantity clear nahi hai.",
-      INVENTORY_ADD_OK: `${p.itemName} ${p.quantity}${p.unitText} inventory mein add ho gaya!`,
+      INVENTORY_ADD_OK: `${p.itemName}: ${p.quantity}${p.unitText} add ho gaya! Total stock: ${p.totalQuantity}${p.unitText}`,
       STOCK_CHECK_ERROR: "Kaunsa item ka stock check karna hai, samajh nahi aaya.",
       STOCK_NOT_FOUND: `${p.itemName} ka stock nahi mila.`,
-      STOCK_CHECK_OK: `${p.itemName} ka current stock: ${p.quantity}${p.unitText}`,
+      STOCK_CHECK_OK: `${p.itemName}: ${p.quantity}${p.unitText}`,
       ALL_STOCK_EMPTY: "Stock list khaali hai.",
-      ALL_STOCK: `Sabka stock:\n${p.lines}`,
+      ALL_STOCK: `Stock:\n${p.lines}`,
       SAVE_NUMBER_ERROR: "Customer name ya phone number samajh nahi aaya.",
       SAVE_NUMBER_OK: `${p.customerName} ka number save ho gaya.`,
       REMINDER_NAME_ERROR: "Kis customer ko reminder bhejna hai, samajh nahi aaya.",
@@ -140,32 +110,17 @@ function buildText(language, key, params = {}) {
       UNKNOWN: "Message samajh nahi aaya. Please dobara bhejein.",
     },
     english: {
-      GREETING_INTRO:
-        "Hello! I am VyaparAI, your smart kirana assistant! 🤖\n" +
-        "I can help you with:\n\n" +
-        "Log Credit - 'Sharma ji owes 500'\n" +
-        "Check Credit - 'How much credit for Sharma ji?'\n" +
-        "Payment Received - 'Sharma ji paid 200'\n" +
-        "Today's Summary - 'today report'\n" +
-        "All Pending Credit - 'show all pending credit'\n" +
-        "Add Stock - 'rice 50 kg aaya'\n" +
-        "Check Stock - 'rice stock quantity'\n" +
-        "All Stock - 'show all stock'\n" +
-        "Save Customer Number - 'Sharma ji number 9876543210'\n" +
-        "Send Reminder - 'remind Sharma ji'\n" +
-        "Voice Messages - Send voice notes, I will understand!\n\n" +
-        "The reply will always match your input language exactly.\n" +
-        "Let's get started! 💪",
+      GREETING_INTRO: "Hello! I am VyaparAI. I can manage both credit and inventory.",
       TODAY_HISAAB: `Today's summary:\nNew credit: ₹${p.newUdhaar}\nRepayment received: ₹${p.wapasReceived}\nNet credit today: ₹${p.netUdhaar}`,
       NO_PENDING_ALL: "All credit:\nNo pending credit.\nTotal: Rs0",
       ALL_UDHAAR: `All credit:\n${p.lines}\nTotal: Rs${p.total}`,
       INVENTORY_ADD_ERROR: "Item or quantity is unclear for stock entry.",
-      INVENTORY_ADD_OK: `${p.itemName} ${p.quantity}${p.unitText} added to inventory!`,
+      INVENTORY_ADD_OK: `${p.itemName}: ${p.quantity}${p.unitText} added! Total stock: ${p.totalQuantity}${p.unitText}`,
       STOCK_CHECK_ERROR: "Could not understand which item stock to check.",
       STOCK_NOT_FOUND: `No stock found for ${p.itemName}.`,
-      STOCK_CHECK_OK: `${p.itemName} current stock: ${p.quantity}${p.unitText}`,
+      STOCK_CHECK_OK: `${p.itemName}: ${p.quantity}${p.unitText}`,
       ALL_STOCK_EMPTY: "Stock list is empty.",
-      ALL_STOCK: `All stock:\n${p.lines}`,
+      ALL_STOCK: `Stock:\n${p.lines}`,
       SAVE_NUMBER_ERROR: "Could not understand customer name or phone number.",
       SAVE_NUMBER_OK: `${p.customerName}'s number has been saved.`,
       REMINDER_NAME_ERROR: "Could not understand which customer to remind.",
@@ -288,6 +243,7 @@ async function receiveWebhook(req, res) {
         text: buildText(language, "INVENTORY_ADD_OK", {
           itemName: row.item_name || itemName,
           quantity: quantityText,
+          totalQuantity: quantityText,
           unitText,
         }),
       });
