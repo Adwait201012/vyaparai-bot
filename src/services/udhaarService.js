@@ -1,4 +1,5 @@
 const { supabase } = require("../config/supabase");
+const INVENTORY_TABLE = "inventory";
 
 async function logUdhaar({ customerName, amount }) {
   const { data, error } = await supabase
@@ -175,7 +176,7 @@ async function addInventoryStock({ itemName, quantity, unit }) {
   const normalizedUnit = String(unit || "").trim();
 
   const { data: existing, error: findError } = await supabase
-    .from("inventory")
+    .from(INVENTORY_TABLE)
     .select("id,item_name,quantity,unit")
     .ilike("item_name", normalizedItemName)
     .limit(1)
@@ -188,7 +189,7 @@ async function addInventoryStock({ itemName, quantity, unit }) {
   if (existing?.id) {
     const nextQuantity = Number(existing.quantity || 0) + Number(quantity || 0);
     const { data, error: updateError } = await supabase
-      .from("inventory")
+      .from(INVENTORY_TABLE)
       .update({
         item_name: existing.item_name || normalizedItemName,
         quantity: nextQuantity,
@@ -206,7 +207,7 @@ async function addInventoryStock({ itemName, quantity, unit }) {
   }
 
   const { data, error } = await supabase
-    .from("inventory")
+    .from(INVENTORY_TABLE)
     .insert([
       {
         item_name: normalizedItemName,
@@ -227,7 +228,7 @@ async function addInventoryStock({ itemName, quantity, unit }) {
 async function getInventoryStock({ itemName }) {
   const normalizedItemName = String(itemName || "").trim();
   const { data, error } = await supabase
-    .from("inventory")
+    .from(INVENTORY_TABLE)
     .select("item_name,quantity,unit")
     .ilike("item_name", normalizedItemName)
     .limit(1)
@@ -242,7 +243,7 @@ async function getInventoryStock({ itemName }) {
 
 async function getAllInventoryStock() {
   const { data, error } = await supabase
-    .from("inventory")
+    .from(INVENTORY_TABLE)
     .select("item_name,quantity,unit")
     .order("item_name", { ascending: true });
 

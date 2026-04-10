@@ -109,6 +109,8 @@ function parseNumberAndUnit(text) {
 }
 
 function cleanupItemName(raw) {
+  // Keep user-provided item wording (e.g., "rice" vs "chawal") as-is semantically;
+  // only remove action/noise tokens. No language-based item translation is applied.
   const text = String(raw || "")
     .toLowerCase()
     .replace(/\b(aaj|today|got|received|added|add|aaya|aayi|aaye|inventory|stock|mein|me|ko|hai|kitna|kitni|dikhao|show|all|sabka|sabhi|ka|ki)\b/g, " ")
