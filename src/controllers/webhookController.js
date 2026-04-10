@@ -64,6 +64,8 @@ function buildText(language, key, params = {}) {
       ALL_UDHAAR: `सभी का उधार:\n${p.lines}\nकुल: Rs${p.total}`,
       INVENTORY_ADD_ERROR: "इन्वेंटरी जोड़ने के लिए वस्तु या मात्रा स्पष्ट नहीं है।",
       INVENTORY_ADD_OK: `${p.itemName}: ${p.quantity}${p.unitText} जोड़ दिया गया! कुल स्टॉक: ${p.totalQuantity}${p.unitText}`,
+      INVENTORY_ADD_MULTI: `जोड़ दिया:\n${p.lines}`,
+      INVENTORY_ADD_MULTI_ITEM: `${p.itemName}: ${p.quantity}${p.unitText} जोड़ा, कुल ${p.totalQuantity}${p.unitText}`,
       STOCK_CHECK_ERROR: "किस वस्तु का स्टॉक देखना है, यह समझ नहीं आया।",
       STOCK_NOT_FOUND: `${p.itemName} का स्टॉक नहीं मिला।`,
       STOCK_CHECK_OK: `${p.itemName}: ${p.quantity}${p.unitText}`,
@@ -90,6 +92,8 @@ function buildText(language, key, params = {}) {
       ALL_UDHAAR: `Sabka udhaar:\n${p.lines}\nTotal: Rs${p.total}`,
       INVENTORY_ADD_ERROR: "Stock entry ke liye item ya quantity clear nahi hai.",
       INVENTORY_ADD_OK: `${p.itemName}: ${p.quantity}${p.unitText} add ho gaya! Total stock: ${p.totalQuantity}${p.unitText}`,
+      INVENTORY_ADD_MULTI: `Add ho gaya:\n${p.lines}`,
+      INVENTORY_ADD_MULTI_ITEM: `${p.itemName}: ${p.quantity}${p.unitText} add, total ${p.totalQuantity}${p.unitText}`,
       STOCK_CHECK_ERROR: "Kaunsa item ka stock check karna hai, samajh nahi aaya.",
       STOCK_NOT_FOUND: `${p.itemName} ka stock nahi mila.`,
       STOCK_CHECK_OK: `${p.itemName}: ${p.quantity}${p.unitText}`,
@@ -116,6 +120,8 @@ function buildText(language, key, params = {}) {
       ALL_UDHAAR: `All credit:\n${p.lines}\nTotal: Rs${p.total}`,
       INVENTORY_ADD_ERROR: "Item or quantity is unclear for stock entry.",
       INVENTORY_ADD_OK: `${p.itemName}: ${p.quantity}${p.unitText} added! Total stock: ${p.totalQuantity}${p.unitText}`,
+      INVENTORY_ADD_MULTI: `Added:\n${p.lines}`,
+      INVENTORY_ADD_MULTI_ITEM: `${p.itemName}: ${p.quantity}${p.unitText} added, total ${p.totalQuantity}${p.unitText}`,
       STOCK_CHECK_ERROR: "Could not understand which item stock to check.",
       STOCK_NOT_FOUND: `No stock found for ${p.itemName}.`,
       STOCK_CHECK_OK: `${p.itemName}: ${p.quantity}${p.unitText}`,
@@ -186,6 +192,7 @@ async function receiveWebhook(req, res) {
     const itemName = (aiResult.itemName || "").trim();
     const quantity = Number(aiResult.quantity);
     const unit = (aiResult.unit || "").trim();
+    const inventoryItems = Array.isArray(aiResult.items) ? aiResult.items : [];
     // Enforce template language purely from owner's input text.
     const language = normalizeLanguage(detectLanguageFromText(text));
 
@@ -227,7 +234,16 @@ async function receiveWebhook(req, res) {
     }
 
     if (intent === "INVENTORY_ADD") {
-      if (!itemName || !Number.isFinite(quantity) || quantity <= 0) {
+      const validItems = inventoryItems
+        .map((entry) => ({
+          itemName: String(entry?.itemName || "").trim(),
+          quantity: Number(entry?.quantity),
+          unit: String(entry?.unit || "").trim(),
+        }))
+        .filter((entry) => entry.itemName && Number.isFinite(entry.quantity) && entry.quantity > 0);
+      const hasMultiItems = validItems.length > 1;
+
+      if (!hasMultiItems && (!itemName || !Number.isFinite(quantity) || quantity <= 0)) {
         await sendTextMessage({
           to: ownerWaId,
           text: buildText(language, "INVENTORY_ADD_ERROR"),
@@ -235,15 +251,43 @@ async function receiveWebhook(req, res) {
         return;
       }
 
+      if (hasMultiItems) {
+        const lines = [];
+        for (const entry of validItems) {
+          const row = await addInventoryStock({
+            itemName: entry.itemName,
+            quantity: entry.quantity,
+            unit: entry.unit,
+          });
+          const quantityText = formatAmount(entry.quantity);
+          const totalText = formatAmount(row.quantity);
+          const unitText = row.unit ? ` ${row.unit}` : "";
+          lines.push(
+            buildText(language, "INVENTORY_ADD_MULTI_ITEM", {
+              itemName: row.item_name || entry.itemName,
+              quantity: quantityText,
+              totalQuantity: totalText,
+              unitText,
+            }),
+          );
+        }
+        await sendTextMessage({
+          to: ownerWaId,
+          text: buildText(language, "INVENTORY_ADD_MULTI", { lines: lines.join("\n") }),
+        });
+        return;
+      }
+
       const row = await addInventoryStock({ itemName, quantity, unit });
-      const quantityText = formatAmount(row.quantity);
+      const quantityText = formatAmount(quantity);
+      const totalText = formatAmount(row.quantity);
       const unitText = row.unit ? ` ${row.unit}` : "";
       await sendTextMessage({
         to: ownerWaId,
         text: buildText(language, "INVENTORY_ADD_OK", {
           itemName: row.item_name || itemName,
           quantity: quantityText,
-          totalQuantity: quantityText,
+          totalQuantity: totalText,
           unitText,
         }),
       });

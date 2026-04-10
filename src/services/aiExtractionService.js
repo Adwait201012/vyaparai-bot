@@ -2,7 +2,7 @@ const Groq = require("groq-sdk");
 const env = require("../config/env");
 
 const SYSTEM_PROMPT =
-  "Classify the user message into one intent from: GREETING, LOG_UDHAAR, CHECK_UDHAAR, LOG_WAPAS, TODAY_HISAAB, SABKA_UDHAAR, SAVE_NUMBER, SEND_REMINDER, INVENTORY_ADD, CHECK_STOCK, ALL_STOCK, UNKNOWN. Return ONLY JSON with keys: intent, customerName, amount, phoneNumber, itemName, quantity, unit. Focus on extracting itemName, quantity, unit for inventory messages.";
+  "Classify the user message into one intent from: GREETING, LOG_UDHAAR, CHECK_UDHAAR, LOG_WAPAS, TODAY_HISAAB, SABKA_UDHAAR, SAVE_NUMBER, SEND_REMINDER, INVENTORY_ADD, CHECK_STOCK, ALL_STOCK, UNKNOWN. Return ONLY JSON. For inventory extraction, support ANY grocery/food item name in Hindi/English/Hinglish dynamically (do not hardcode item names). Return keys: intent, customerName, amount, phoneNumber, itemName, quantity, unit, items. For multi-item inventory messages, `items` should be an array like [{itemName, quantity, unit}, ...].";
 
 const client = new Groq({ apiKey: env.groqApiKey });
 
@@ -108,17 +108,86 @@ function parseNumberAndUnit(text) {
   };
 }
 
+function removeNoise(text) {
+  return String(text || "")
+    .toLowerCase()
+    .replace(/\b(aaj|today|got|received|added|add|aaya|aayi|aaye|inventory|stock|mein|me|ko|hai|kitna|kitni|dikhao|show|all|sabka|sabhi|ka|ki|aur|and)\b/g, " ")
+    .replace(/[^\p{L}\s]/gu, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
 function cleanupItemName(raw) {
   // Keep user-provided item wording (e.g., "rice" vs "chawal") as-is semantically;
   // only remove action/noise tokens. No language-based item translation is applied.
   const text = String(raw || "")
     .toLowerCase()
-    .replace(/\b(aaj|today|got|received|added|add|aaya|aayi|aaye|inventory|stock|mein|me|ko|hai|kitna|kitni|dikhao|show|all|sabka|sabhi|ka|ki)\b/g, " ")
+    .replace(/\b(aaj|today|got|received|added|add|aaya|aayi|aaye|inventory|stock|mein|me|ko|hai|kitna|kitni|dikhao|show|all|sabka|sabhi|ka|ki|aur|and)\b/g, " ")
     .replace(/\d+(?:\.\d+)?\s*(kg|g|gm|gram|grams|ltr|l|ml|packet|packets|pcs|pc|piece|pieces|dozen|box|boxes)?/gi, " ")
     .replace(/[^\p{L}\s]/gu, " ")
     .replace(/\s+/g, " ")
     .trim();
   return text;
+}
+
+function parseInventoryPart(partText) {
+  const part = String(partText || "").trim();
+  if (!part) {
+    return null;
+  }
+
+  const qFirst = part.match(
+    /(\d+(?:\.\d+)?)\s*(kg|g|gm|gram|grams|ltr|l|ml|packet|packets|pcs|pc|piece|pieces|dozen|box|boxes)?\s+(.+)/i,
+  );
+  if (qFirst) {
+    const quantity = Number(qFirst[1]);
+    const unit = String(qFirst[2] || "").toLowerCase();
+    const itemName = cleanupItemName(qFirst[3]);
+    if (itemName && Number.isFinite(quantity) && quantity > 0) {
+      return { itemName, quantity, unit };
+    }
+  }
+
+  const qLast = part.match(
+    /(.+?)\s+(\d+(?:\.\d+)?)\s*(kg|g|gm|gram|grams|ltr|l|ml|packet|packets|pcs|pc|piece|pieces|dozen|box|boxes)?$/i,
+  );
+  if (qLast) {
+    const itemName = cleanupItemName(qLast[1]);
+    const quantity = Number(qLast[2]);
+    const unit = String(qLast[3] || "").toLowerCase();
+    if (itemName && Number.isFinite(quantity) && quantity > 0) {
+      return { itemName, quantity, unit };
+    }
+  }
+
+  const fallbackName = cleanupItemName(part);
+  if (fallbackName) {
+    return { itemName: fallbackName, quantity: 1, unit: "unit" };
+  }
+
+  return null;
+}
+
+function parseInventoryItems(rawText) {
+  const normalized = String(rawText || "")
+    .replace(/\b(aaya|aayi|aaye|got|received|added)\b/gi, " ")
+    .trim();
+  const parts = normalized.split(/\s+(?:aur|and|,)\s+/i);
+  const items = parts
+    .map((part) => parseInventoryPart(part))
+    .filter(Boolean);
+
+  const deduped = [];
+  const seen = new Set();
+  for (const item of items) {
+    const key = `${item.itemName}|${item.unit}|${item.quantity}`;
+    if (seen.has(key)) {
+      continue;
+    }
+    seen.add(key);
+    deduped.push(item);
+  }
+  return deduped;
 }
 
 function inferInventoryFromText(messageText) {
@@ -143,19 +212,30 @@ function inferInventoryFromText(messageText) {
   }
 
   const isInventoryAdd =
-    /(aaya|aayi|aaye|got|received|added)/.test(lower) &&
-    /\d/.test(lower);
+    /(aaya|aayi|aaye|got|received|added)/.test(lower);
   if (!isInventoryAdd) {
     return {};
   }
 
+  const parsedItems = parseInventoryItems(raw);
+  if (parsedItems.length) {
+    return {
+      intent: "INVENTORY_ADD",
+      itemName: parsedItems[0].itemName,
+      quantity: parsedItems[0].quantity,
+      unit: parsedItems[0].unit,
+      items: parsedItems,
+    };
+  }
+
   const { quantity, unit } = parseNumberAndUnit(lower);
-  const itemName = cleanupItemName(raw);
+  const itemName = cleanupItemName(removeNoise(raw));
   return {
     intent: "INVENTORY_ADD",
     itemName,
     quantity,
     unit,
+    items: itemName ? [{ itemName, quantity: quantity || 1, unit: unit || "unit" }] : [],
   };
 }
 
@@ -202,6 +282,15 @@ async function detectIntent(messageText) {
   const itemName = String(parsed.itemName || "").trim();
   const quantity = Number(parsed.quantity);
   const unit = String(parsed.unit || "").trim();
+  const items = Array.isArray(parsed.items)
+    ? parsed.items
+        .map((entry) => ({
+          itemName: String(entry?.itemName || "").trim(),
+          quantity: Number(entry?.quantity),
+          unit: String(entry?.unit || "").trim(),
+        }))
+        .filter((entry) => entry.itemName)
+    : [];
   const modelLanguage = String(parsed.language || "hinglish").toLowerCase().trim();
   const strictLanguage = detectLanguageFromText(messageText);
 
@@ -212,6 +301,9 @@ async function detectIntent(messageText) {
     ? inventoryFallback.quantity
     : quantity;
   const finalUnit = inventoryFallback.unit || unit;
+  const finalItems = Array.isArray(inventoryFallback.items) && inventoryFallback.items.length
+    ? inventoryFallback.items
+    : items;
 
   return {
     intent: finalIntent,
@@ -221,6 +313,7 @@ async function detectIntent(messageText) {
     itemName: finalItemName,
     quantity: Number.isFinite(finalQuantity) ? finalQuantity : null,
     unit: finalUnit,
+    items: finalItems,
     // Enforce language based on input text so replies always match user language.
     language: ALLOWED_LANGUAGES.has(strictLanguage)
       ? strictLanguage
