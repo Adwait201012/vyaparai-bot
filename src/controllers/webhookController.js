@@ -1,6 +1,7 @@
 const {
   detectIntent,
   detectLanguageFromText,
+  normalizeInventoryItemName,
 } = require("../services/aiExtractionService");
 const {
   logUdhaar,
@@ -254,8 +255,9 @@ async function receiveWebhook(req, res) {
       if (hasMultiItems) {
         const lines = [];
         for (const entry of validItems) {
+          const normalizedItemName = await normalizeInventoryItemName(entry.itemName);
           const row = await addInventoryStock({
-            itemName: entry.itemName,
+            itemName: normalizedItemName || entry.itemName,
             quantity: entry.quantity,
             unit: entry.unit,
           });
@@ -278,7 +280,12 @@ async function receiveWebhook(req, res) {
         return;
       }
 
-      const row = await addInventoryStock({ itemName, quantity, unit });
+      const normalizedItemName = await normalizeInventoryItemName(itemName);
+      const row = await addInventoryStock({
+        itemName: normalizedItemName || itemName,
+        quantity,
+        unit,
+      });
       const quantityText = formatAmount(quantity);
       const totalText = formatAmount(row.quantity);
       const unitText = row.unit ? ` ${row.unit}` : "";
@@ -303,7 +310,8 @@ async function receiveWebhook(req, res) {
         return;
       }
 
-      const stock = await getInventoryStock({ itemName });
+      const normalizedItemName = await normalizeInventoryItemName(itemName);
+      const stock = await getInventoryStock({ itemName: normalizedItemName || itemName });
       if (!stock) {
         await sendTextMessage({
           to: ownerWaId,

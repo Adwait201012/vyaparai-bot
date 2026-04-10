@@ -3,6 +3,8 @@ const env = require("../config/env");
 
 const SYSTEM_PROMPT =
   "Classify the user message into one intent from: GREETING, LOG_UDHAAR, CHECK_UDHAAR, LOG_WAPAS, TODAY_HISAAB, SABKA_UDHAAR, SAVE_NUMBER, SEND_REMINDER, INVENTORY_ADD, CHECK_STOCK, ALL_STOCK, UNKNOWN. Return ONLY JSON. For inventory extraction, support ANY grocery/food item name in Hindi/English/Hinglish dynamically (do not hardcode item names). Return keys: intent, customerName, amount, phoneNumber, itemName, quantity, unit, items. For multi-item inventory messages, `items` should be an array like [{itemName, quantity, unit}, ...].";
+const ITEM_NORMALIZE_PROMPT =
+  "Normalize grocery item names to a standard singular kirana form in lowercase. Keep only item name text. Map common variants to one standard (examples: chawal/rice/chaawal -> chawal, aata/atta/wheat flour -> aata, maggi/Maggi -> maggi). Return ONLY JSON: {\"normalizedItemName\":\"...\"}.";
 
 const client = new Groq({ apiKey: env.groqApiKey });
 
@@ -341,4 +343,30 @@ async function detectIntent(messageText) {
   };
 }
 
-module.exports = { detectIntent, detectLanguageFromText };
+async function normalizeInventoryItemName(itemName) {
+  const raw = String(itemName || "").trim();
+  if (!raw) {
+    return "";
+  }
+
+  try {
+    const completion = await client.chat.completions.create({
+      model: "llama-3.1-8b-instant",
+      temperature: 0,
+      response_format: { type: "json_object" },
+      messages: [
+        { role: "system", content: ITEM_NORMALIZE_PROMPT },
+        { role: "user", content: raw },
+      ],
+    });
+    const output = completion.choices?.[0]?.message?.content || "";
+    const normalized = normalizeJsonText(getJsonObjectText(output));
+    const parsed = JSON.parse(normalized);
+    const value = String(parsed?.normalizedItemName || "").trim().toLowerCase();
+    return value || raw.toLowerCase();
+  } catch {
+    return raw.toLowerCase();
+  }
+}
+
+module.exports = { detectIntent, detectLanguageFromText, normalizeInventoryItemName };

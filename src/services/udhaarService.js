@@ -175,15 +175,29 @@ async function addInventoryStock({ itemName, quantity, unit }) {
   const normalizedItemName = String(itemName || "").trim();
   const normalizedUnit = String(unit || "").trim();
 
-  const { data: existing, error: findError } = await supabase
+  const { data: existingExact, error: findExactError } = await supabase
     .from(INVENTORY_TABLE)
     .select("id,item_name,quantity,unit")
     .ilike("item_name", normalizedItemName)
     .limit(1)
     .maybeSingle();
 
-  if (findError) {
-    throw new Error(`Supabase fetch failed: ${findError.message}`);
+  if (findExactError) {
+    throw new Error(`Supabase fetch failed: ${findExactError.message}`);
+  }
+
+  let existing = existingExact;
+  if (!existing?.id) {
+    const { data: existingFuzzy, error: findFuzzyError } = await supabase
+      .from(INVENTORY_TABLE)
+      .select("id,item_name,quantity,unit")
+      .ilike("item_name", `%${normalizedItemName}%`)
+      .limit(1)
+      .maybeSingle();
+    if (findFuzzyError) {
+      throw new Error(`Supabase fetch failed: ${findFuzzyError.message}`);
+    }
+    existing = existingFuzzy;
   }
 
   if (existing?.id) {
@@ -227,18 +241,33 @@ async function addInventoryStock({ itemName, quantity, unit }) {
 
 async function getInventoryStock({ itemName }) {
   const normalizedItemName = String(itemName || "").trim();
-  const { data, error } = await supabase
+  const { data: exactData, error: exactError } = await supabase
     .from(INVENTORY_TABLE)
     .select("item_name,quantity,unit")
     .ilike("item_name", normalizedItemName)
     .limit(1)
     .maybeSingle();
 
-  if (error) {
-    throw new Error(`Supabase fetch failed: ${error.message}`);
+  if (exactError) {
+    throw new Error(`Supabase fetch failed: ${exactError.message}`);
   }
 
-  return data || null;
+  if (exactData) {
+    return exactData;
+  }
+
+  const { data: fuzzyData, error: fuzzyError } = await supabase
+    .from(INVENTORY_TABLE)
+    .select("item_name,quantity,unit")
+    .ilike("item_name", `%${normalizedItemName}%`)
+    .limit(1)
+    .maybeSingle();
+
+  if (fuzzyError) {
+    throw new Error(`Supabase fetch failed: ${fuzzyError.message}`);
+  }
+
+  return fuzzyData || null;
 }
 
 async function getAllInventoryStock() {
