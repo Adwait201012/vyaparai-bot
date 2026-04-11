@@ -1,7 +1,6 @@
 const {
   detectIntent,
-  detectLanguageFromText,
-  normalizeInventoryItemName,
+  detectLanguage,
 } = require("../services/aiExtractionService");
 const {
   logUdhaar,
@@ -26,14 +25,6 @@ const verifyWebhook = (req, res) => {
   res.status(200).send("Twilio webhook is active");
 };
 
-function normalizeLanguage(language) {
-  const lang = String(language || "").toLowerCase().trim();
-  if (lang === "hindi" || lang === "hinglish" || lang === "english") {
-    return lang;
-  }
-  return "hinglish";
-}
-
 function formatAmount(value) {
   const numberValue = Number(value || 0);
   return Number.isInteger(numberValue)
@@ -54,151 +45,94 @@ function normalizeCustomerPhone(phone) {
   return `+${digits}`;
 }
 
-function buildText(language, key, params = {}) {
-  const lang = normalizeLanguage(language);
-  const p = params;
+// Hardcoded reply templates based on language
+const TEMPLATES = {
+  hinglish: {
+    GREETING: "👋 Namaste! Main VyaparAI hun!\n\n💰 Udhaar log — Sharma ji 500 udhaar\n🔍 Check — Sharma ji kitna udhaar\n✅ Payment — Sharma ji 200 wapas\n📊 Hisaab — aaj ka hisaab\n👥 Sabka — sabka udhaar dikhao\n📦 Stock — chawal 50kg aaya\n📉 Stock check — chawal kitna hai\n📋 Sabka stock — sabka stock dikhao\n📱 Number — Sharma ji number 9876543210\n🔔 Reminder — Sharma ji ko remind karo",
+    LOG_UDHAAR: "✅ Done!\n👤 {name}\n💸 Udhaar: ₹{amount}\n📌 Total: ₹{total}",
+    CHECK_UDHAAR: "👤 {name}\n💰 Baaki: ₹{total}",
+    LOG_WAPAS: "✅ Payment!\n👤 {name}\n💵 Wapas: ₹{amount}\n📌 Baaki: ₹{remaining}",
+    TODAY_HISAAB: "📊 Aaj ka hisaab\n💸 Udhaar: ₹{newUdhaar}\n✅ Wapas: ₹{wapasReceived}\n📌 Net: ₹{net}",
+    SABKA_UDHAAR: "👥 Sabka udhaar:\n{list}\n💰 Total: ₹{total}",
+    INVENTORY_ADD: "📦 Stock updated!\n🏷️ {item}\n➕ Added: {qty}{unit}\n📊 Total: {total}{unit}",
+    CHECK_STOCK: "📦 {item}\n📊 Stock: {qty}{unit}",
+    ALL_STOCK: "📋 Sabka stock:\n{list}",
+    LOW_STOCK: "⚠️ Low stock!\n🏷️ {item}: sirf {qty}{unit} bacha!",
+    SAVE_NUMBER: "✅ {name} ka number save!",
+    SEND_REMINDER: "✅ {name} ko reminder bhej diya!\n💰 Udhaar: ₹{total}",
+    UNKNOWN: "🤔 Samajh nahi aaya. Hi bhejo to main sab features dikhaunga!",
+    ERRORS: {
+      DATABASE: "Sorry, database error. Try again!",
+      NAME_REQUIRED: "Customer name required!",
+      AMOUNT_REQUIRED: "Amount required!",
+      ITEM_REQUIRED: "Item name required!",
+      QUANTITY_REQUIRED: "Quantity required!",
+      PHONE_REQUIRED: "Phone number required!",
+    }
+  },
+  english: {
+    GREETING: "👋 Hello! I am VyaparAI!\n\n💰 Log credit — Sharma ji 500 udhaar\n🔍 Check credit — Sharma ji kitna udhaar\n✅ Payment received — Sharma ji 200 wapas\n📊 Today summary — aaj ka hisaab\n👥 All credit — sabka udhaar dikhao\n📦 Add stock — chawal 50kg aaya\n📉 Check stock — chawal kitna hai\n📋 All stock — sabka stock dikhao\n📱 Save number — Sharma ji number 9876543210\n🔔 Reminder — Sharma ji ko remind karo",
+    LOG_UDHAAR: "✅ Done!\n👤 {name}\n💸 Credit: ₹{amount}\n📌 Total: ₹{total}",
+    CHECK_UDHAAR: "👤 {name}\n💰 Pending: ₹{total}",
+    LOG_WAPAS: "✅ Payment received!\n👤 {name}\n💵 Paid: ₹{amount}\n📌 Remaining: ₹{remaining}",
+    TODAY_HISAAB: "📊 Today's summary\n💸 Credit: ₹{newUdhaar}\n✅ Received: ₹{wapasReceived}\n📌 Net: ₹{net}",
+    SABKA_UDHAAR: "👥 All credit:\n{list}\n💰 Total: ₹{total}",
+    INVENTORY_ADD: "📦 Stock updated!\n🏷️ {item}\n➕ Added: {qty}{unit}\n📊 Total: {total}{unit}",
+    CHECK_STOCK: "📦 {item}\n📊 Stock: {qty}{unit}",
+    ALL_STOCK: "📋 All stock:\n{list}",
+    LOW_STOCK: "⚠️ Low stock!\n🏷️ {item}: only {qty}{unit} left!",
+    SAVE_NUMBER: "✅ {name} number saved!",
+    SEND_REMINDER: "✅ Reminder sent to {name}!\n💰 Credit: ₹{total}",
+    UNKNOWN: "🤔 Could not understand. Send 'hi' to see all features!",
+    ERRORS: {
+      DATABASE: "Sorry, database error. Try again!",
+      NAME_REQUIRED: "Customer name required!",
+      AMOUNT_REQUIRED: "Amount required!",
+      ITEM_REQUIRED: "Item name required!",
+      QUANTITY_REQUIRED: "Quantity required!",
+      PHONE_REQUIRED: "Phone number required!",
+    }
+  },
+  hindi: {
+    GREETING: "👋 नमस्ते! मैं VyaparAI हूं!\n\n💰 उधार लॉग — शर्मा जी 500 उधार\n🔍 उधार चेक — शर्मा जी कितना उधार\n✅ पेमेंट लिया — शर्मा जी 200 वापस\n📊 आज का हिसाब — आज का हिसाब\n👥 सबका उधार — सबका उधार दिखाओ\n📦 स्टॉक जोड़ें — चावल 50kg आया\n📉 स्टॉक चेक — चावल कितना है\n📋 सबका स्टॉक — सबका स्टॉक दिखाओ\n📱 नंबर सेव — शर्मा जी number 9876543210\n🔔 रिमाइंडर — शर्मा जी को remind करो",
+    LOG_UDHAAR: "✅ हो गया!\n👤 {name}\n💸 उधार: ₹{amount}\n📌 कुल: ₹{total}",
+    CHECK_UDHAAR: "👤 {name}\n💰 बाकी: ₹{total}",
+    LOG_WAPAS: "✅ पेमेंट प्राप्त!\n👤 {name}\n💵 वापस: ₹{amount}\n📌 बाकी: ₹{remaining}",
+    TODAY_HISAAB: "📊 आज का हिसाब\n💸 उधार: ₹{newUdhaar}\n✅ वापस मिला: ₹{wapasReceived}\n📌 नेट: ₹{net}",
+    SABKA_UDHAAR: "👥 सबका उधार:\n{list}\n💰 कुल: ₹{total}",
+    INVENTORY_ADD: "📦 स्टॉक अपडेटेड!\n🏷️ {item}\n➕ जोड़ा: {qty}{unit}\n📊 कुल: {total}{unit}",
+    CHECK_STOCK: "📦 {item}\n📊 स्टॉक: {qty}{unit}",
+    ALL_STOCK: "📋 सबका स्टॉक:\n{list}",
+    LOW_STOCK: "⚠️ कम स्टॉक!\n🏷️ {item}: सिर्फ {qty}{unit} बचा है!",
+    SAVE_NUMBER: "✅ {name} का नंबर सेव!",
+    SEND_REMINDER: "✅ {name} को रिमाइंडर भेज दिया!\n💰 उधार: ₹{total}",
+    UNKNOWN: "🤔 समझ नहीं आया। हाय भेजें तो मैं सभी फीचर्स दिखाऊंगा!",
+    ERRORS: {
+      DATABASE: "क्षमा करें, डेटाबेस त्रुटि। फिर से कोशिश करें!",
+      NAME_REQUIRED: "ग्राहक नाम आवश्यक!",
+      AMOUNT_REQUIRED: "राशि आवश्यक!",
+      ITEM_REQUIRED: "आइटम नाम आवश्यक!",
+      QUANTITY_REQUIRED: "मात्रा आवश्यक!",
+      PHONE_REQUIRED: "फोन नंबर आवश्यक!",
+    }
+  }
+};
 
-  const templates = {
-    hindi: {
-      GREETING_INTRO:
-        "👋 नमस्ते! मैं VyaparAI हूं!\n" +
-        "आप क्या करना चाहते हैं?\n" +
-        "💰 उधार लॉग — शर्मा जी 500 उधार\n" +
-        "🔍 उधार चेक — शर्मा जी कितना उधार\n" +
-        "✅ पेमेंट लिया — शर्मा जी 200 वापस\n" +
-        "📊 आज का हिसाब — आज का हिसाब\n" +
-        "👥 सबका उधार — सबका उधार दिखाओ\n" +
-        "📦 स्टॉक जोड़ें — चावल 50kg आया\n" +
-        "📉 स्टॉक चेक — चावल कितना है\n" +
-        "📋 सबका स्टॉक — सबका स्टॉक दिखाओ\n" +
-        "📱 नंबर सेव — शर्मा जी number 9876543210\n" +
-        "🔔 रिमाइंडर — शर्मा जी को remind करो",
-      TODAY_HISAAB: `📊 आज का हिसाब\n💸 नया उधार: ₹${p.newUdhaar}\n✅ वापस मिला: ₹${p.wapasReceived}\n📌 नेट उधार: ₹${p.netUdhaar}`,
-      NO_PENDING_ALL: "👥 सबका उधार\nकोई पेंडिंग उधार नहीं ✅\n💰 Total: ₹0",
-      ALL_UDHAAR: `👥 सबका उधार\n${p.lines}\n💰 Total: ₹${p.total}`,
-      INVENTORY_ADD_ERROR: "इन्वेंटरी जोड़ने के लिए वस्तु या मात्रा स्पष्ट नहीं है।",
-      INVENTORY_ADD_OK: `📦 स्टॉक अपडेटेड!\n🏷️ ${p.itemName}\n➕ Added: ${p.quantity}${p.unitText}\n📊 Total: ${p.totalQuantity}${p.unitText}`,
-      INVENTORY_ADD_MULTI: `📦 स्टॉक अपडेटेड!\n${p.lines}`,
-      INVENTORY_ADD_MULTI_ITEM: `🏷️ ${p.itemName}\n➕ Added: ${p.quantity}${p.unitText}\n📊 Total: ${p.totalQuantity}${p.unitText}`,
-      LOW_STOCK_ALERT: `⚠️ चेतावनी: ${p.itemName} कम है! सिर्फ ${p.quantity}${p.unitText} बचा है।`,
-      STOCK_CHECK_ERROR: "किस वस्तु का स्टॉक देखना है, यह समझ नहीं आया।",
-      STOCK_NOT_FOUND: `${p.itemName} स्टॉक में नहीं मिला।`,
-      STOCK_CHECK_OK: `📉 स्टॉक चेक\n🏷️ ${p.itemName}\n📊 उपलब्ध: ${p.quantity}${p.unitText}`,
-      ALL_STOCK_EMPTY: "स्टॉक खाली है 📭",
-      ALL_STOCK: `📋 सबका स्टॉक\n${p.lines}`,
-      SAVE_NUMBER_ERROR: "ग्राहक का नाम या फोन नंबर समझ नहीं आया।",
-      SAVE_NUMBER_OK: `${p.customerName} का नंबर सेव ✅`,
-      REMINDER_NAME_ERROR: "किस ग्राहक को याद दिलाना है, यह समझ नहीं आया।",
-      REMINDER_NO_PHONE: `${p.customerName} का नंबर नहीं मिला। पहले "${p.customerName} number 9876543210" भेजें।`,
-      REMINDER_CUSTOMER: `नमस्ते ${p.customerName} जी, ₹${p.amount} उधार बाकी है। कृपया भुगतान करें।`,
-      REMINDER_OWNER_OK: `रिमाइंडर भेज दिया ✅`,
-      CHECK_NAME_ERROR: "कस्टमर का नाम समझ नहीं आया।",
-      CHECK_OK: `👤 ${p.customerName}\n💰 बाकी उधार: ₹${p.amount}`,
-      WAPAS_ERROR: "वापस एंट्री के लिए नाम या अमाउंट क्लियर नहीं है।",
-      WAPAS_OK: `✅ पेमेंट प्राप्त!\n👤 ${p.customerName}\n💵 वापस: ₹${p.amount}\n📌 बाकी: ₹${p.remaining}`,
-      UDHAAR_ERROR: "उधार एंट्री के लिए नाम या अमाउंट क्लियर नहीं है।",
-      UDHAAR_OK: `✅ हो गया!\n👤 ${p.customerName}\n💸 उधार: ₹${p.amount}\n📌 Total: ₹${p.total}`,
-      UNKNOWN: "मैसेज समझ नहीं आया। कृपया फिर से लिखें।",
-    },
-    hinglish: {
-      GREETING_INTRO:
-        "👋 Namaste! Main VyaparAI hun!\n" +
-        "Aap kya karna chahte ho?\n" +
-        "💰 Udhaar log — Sharma ji 500 udhaar\n" +
-        "🔍 Udhaar check — Sharma ji kitna udhaar\n" +
-        "✅ Payment liya — Sharma ji 200 wapas\n" +
-        "📊 Aaj ka hisaab — aaj ka hisaab\n" +
-        "👥 Sabka udhaar — sabka udhaar dikhao\n" +
-        "📦 Stock add — chawal 50kg aaya\n" +
-        "📉 Stock check — chawal kitna hai\n" +
-        "📋 Sabka stock — sabka stock dikhao\n" +
-        "📱 Number save — Sharma ji number 9876543210\n" +
-        "🔔 Reminder — Sharma ji ko remind karo",
-      TODAY_HISAAB: `📊 Aaj ka hisaab\n💸 Naya udhaar: ₹${p.newUdhaar}\n✅ Wapas mila: ₹${p.wapasReceived}\n📌 Net udhaar: ₹${p.netUdhaar}`,
-      NO_PENDING_ALL: "👥 Sabka udhaar\nKoi pending udhaar nahi ✅\n💰 Total: ₹0",
-      ALL_UDHAAR: `👥 Sabka udhaar\n${p.lines}\n💰 Total: ₹${p.total}`,
-      INVENTORY_ADD_ERROR: "Stock entry ke liye item ya quantity clear nahi hai.",
-      INVENTORY_ADD_OK: `📦 Stock updated!\n🏷️ ${p.itemName}\n➕ Added: ${p.quantity}${p.unitText}\n📊 Total: ${p.totalQuantity}${p.unitText}`,
-      INVENTORY_ADD_MULTI: `📦 Stock updated!\n${p.lines}`,
-      INVENTORY_ADD_MULTI_ITEM: `🏷️ ${p.itemName}\n➕ Added: ${p.quantity}${p.unitText}\n📊 Total: ${p.totalQuantity}${p.unitText}`,
-      LOW_STOCK_ALERT: `⚠️ Low Stock Alert!\n🏷️ ${p.itemName}: only ${p.quantity}${p.unitText} left!`,
-      STOCK_CHECK_ERROR: "Kaunsa item ka stock check karna hai, samajh nahi aaya.",
-      STOCK_NOT_FOUND: `${p.itemName} stock mein nahi mila.`,
-      STOCK_CHECK_OK: `📉 Stock check\n🏷️ ${p.itemName}\n📊 Available: ${p.quantity}${p.unitText}`,
-      ALL_STOCK_EMPTY: "Stock khaali hai 📭",
-      ALL_STOCK: `📋 Sabka stock\n${p.lines}`,
-      SAVE_NUMBER_ERROR: "Customer name ya phone number samajh nahi aaya.",
-      SAVE_NUMBER_OK: `${p.customerName} ka number save ✅`,
-      REMINDER_NAME_ERROR: "Kis customer ko reminder bhejna hai, samajh nahi aaya.",
-      REMINDER_NO_PHONE: `${p.customerName} ka number nahi mila. Pehle "${p.customerName} number 9876543210" bhejein.`,
-      REMINDER_CUSTOMER: `Namaste ${p.customerName} ji, ₹${p.amount} udhaar pending hai. Please payment kar dein.`,
-      REMINDER_OWNER_OK: `Reminder bhej diya ✅`,
-      CHECK_NAME_ERROR: "Customer ka naam samajh nahi aaya.",
-      CHECK_OK: `👤 ${p.customerName}\n💰 Baaki udhaar: ₹${p.amount}`,
-      WAPAS_ERROR: "Wapas entry ke liye naam ya amount clear nahi hai.",
-      WAPAS_OK: `✅ Payment received!\n👤 ${p.customerName}\n💵 Wapas: ₹${p.amount}\n📌 Baaki: ₹${p.remaining}`,
-      UDHAAR_ERROR: "Udhaar entry ke liye naam ya amount clear nahi hai.",
-      UDHAAR_OK: `✅ Done!\n👤 ${p.customerName}\n💸 Udhaar: ₹${p.amount}\n📌 Total: ₹${p.total}`,
-      UNKNOWN: "Message samajh nahi aaya. Please dobara bhejein.",
-    },
-    english: {
-      GREETING_INTRO:
-        "👋 Hello! I am VyaparAI!\n" +
-        "What would you like to do?\n" +
-        "💰 Log credit — Sharma ji 500 udhaar\n" +
-        "🔍 Check credit — Sharma ji kitna udhaar\n" +
-        "✅ Payment received — Sharma ji 200 wapas\n" +
-        "📊 Today summary — aaj ka hisaab\n" +
-        "👥 All credit — sabka udhaar dikhao\n" +
-        "📦 Add stock — chawal 50kg aaya\n" +
-        "📉 Check stock — chawal kitna hai\n" +
-        "📋 All stock — sabka stock dikhao\n" +
-        "📱 Save number — Sharma ji number 9876543210\n" +
-        "🔔 Reminder — Sharma ji ko remind karo",
-      TODAY_HISAAB: `📊 Today's summary\n💸 New credit: ₹${p.newUdhaar}\n✅ Received back: ₹${p.wapasReceived}\n📌 Net credit: ₹${p.netUdhaar}`,
-      NO_PENDING_ALL: "👥 All credit\nNo pending amount ✅\n💰 Total: ₹0",
-      ALL_UDHAAR: `👥 All credit\n${p.lines}\n💰 Total: ₹${p.total}`,
-      INVENTORY_ADD_ERROR: "Item or quantity is unclear for stock entry.",
-      INVENTORY_ADD_OK: `📦 Stock updated!\n🏷️ ${p.itemName}\n➕ Added: ${p.quantity}${p.unitText}\n📊 Total: ${p.totalQuantity}${p.unitText}`,
-      INVENTORY_ADD_MULTI: `📦 Stock updated!\n${p.lines}`,
-      INVENTORY_ADD_MULTI_ITEM: `🏷️ ${p.itemName}\n➕ Added: ${p.quantity}${p.unitText}\n📊 Total: ${p.totalQuantity}${p.unitText}`,
-      LOW_STOCK_ALERT: `⚠️ Warning: ${p.itemName} stock is low! Only ${p.quantity}${p.unitText} remaining.`,
-      STOCK_CHECK_ERROR: "Could not understand which item stock to check.",
-      STOCK_NOT_FOUND: `No stock found for ${p.itemName}.`,
-      STOCK_CHECK_OK: `📉 Stock check\n🏷️ ${p.itemName}\n📊 Available: ${p.quantity}${p.unitText}`,
-      ALL_STOCK_EMPTY: "Stock is empty 📭",
-      ALL_STOCK: `📋 All stock\n${p.lines}`,
-      SAVE_NUMBER_ERROR: "Could not understand customer name or phone number.",
-      SAVE_NUMBER_OK: `${p.customerName} number saved ✅`,
-      REMINDER_NAME_ERROR: "Could not understand which customer to remind.",
-      REMINDER_NO_PHONE: `No number found for ${p.customerName}. First send "${p.customerName} number 9876543210".`,
-      REMINDER_CUSTOMER: `Hello ${p.customerName}, ₹${p.amount} is pending. Please pay soon.`,
-      REMINDER_OWNER_OK: `Reminder sent ✅`,
-      CHECK_NAME_ERROR: "Could not understand customer name.",
-      CHECK_OK: `👤 ${p.customerName}\n💰 Pending credit: ₹${p.amount}`,
-      WAPAS_ERROR: "Name or amount is unclear for repayment entry.",
-      WAPAS_OK: `✅ Payment received!\n👤 ${p.customerName}\n💵 Paid: ₹${p.amount}\n📌 Remaining: ₹${p.remaining}`,
-      UDHAAR_ERROR: "Name or amount is unclear for credit entry.",
-      UDHAAR_OK: `✅ Done!\n👤 ${p.customerName}\n💸 Credit: ₹${p.amount}\n📌 Total: ₹${p.total}`,
-      UNKNOWN: "Could not understand the message. Please try again.",
-    },
-  };
-
-  return templates[lang][key] || templates.hinglish.UNKNOWN;
+function getTemplate(language, key, params = {}) {
+  const lang = TEMPLATES[language] || TEMPLATES.hinglish;
+  let template = lang[key] || lang.UNKNOWN;
+  
+  // Replace parameters in template
+  for (const [key, value] of Object.entries(params)) {
+    template = template.replace(new RegExp(`{${key}}`, 'g'), value);
+  }
+  
+  return template;
 }
 
-async function handleTodayHisaab({ ownerWaId, language }) {
-  const today = await getTodayHisaab();
-  const replyText = buildText(language, "TODAY_HISAAB", {
-    newUdhaar: formatAmount(today.newUdhaar),
-    wapasReceived: formatAmount(today.wapasReceived),
-    netUdhaar: formatAmount(today.netUdhaar),
-  });
-
-  await sendTextMessage({
-    to: ownerWaId,
-    text: replyText,
-  });
+function getErrorTemplate(language, errorKey) {
+  const lang = TEMPLATES[language] || TEMPLATES.hinglish;
+  return lang.ERRORS[errorKey] || lang.ERRORS.DATABASE;
 }
 
 async function receiveWebhook(req, res) {
@@ -213,333 +147,321 @@ async function receiveWebhook(req, res) {
 
     let text = incomingText;
 
+    // Handle audio messages
     if (isAudioMedia(mediaContentType) && mediaUrl) {
-      const transcribedText = await transcribeTwilioAudio({
-        mediaUrl,
-        mediaContentType,
-      });
-      text = transcribedText;
+      try {
+        const transcribedText = await transcribeTwilioAudio({
+          mediaUrl,
+          mediaContentType,
+        });
+        text = transcribedText;
+      } catch (error) {
+        console.error('Audio transcription failed:', error.message);
+        await sendTextMessage({
+          to: ownerWaId,
+          text: getErrorTemplate('hinglish', 'DATABASE')
+        });
+        return;
+      }
     }
 
     if (!ownerWaId || !text) {
       return;
     }
 
-    const aiResult = await detectIntent(text);
-    const intent = aiResult.intent || "UNKNOWN";
-    const customerName = (aiResult.customerName || "").trim();
-    const amount = Number(aiResult.amount);
-    const phoneNumber = (aiResult.phoneNumber || "").trim();
-    const itemName = (aiResult.itemName || "").trim();
-    const quantity = Number(aiResult.quantity);
-    const unit = (aiResult.unit || "").trim();
-    const inventoryItems = Array.isArray(aiResult.items) ? aiResult.items : [];
-    // Enforce template language purely from owner's input text.
-    const language = normalizeLanguage(detectLanguageFromText(text));
-
-    if (intent === "GREETING") {
+    // Get intent from Groq first
+    let aiResult;
+    try {
+      aiResult = await detectIntent(text);
+    } catch (error) {
+      console.error('Groq detection failed:', error.message);
       await sendTextMessage({
         to: ownerWaId,
-        text: buildText(language, "GREETING_INTRO"),
+        text: getErrorTemplate('hinglish', 'DATABASE')
       });
       return;
     }
 
-    if (intent === "TODAY_HISAAB") {
-      await handleTodayHisaab({ ownerWaId, language });
-      return;
-    }
+    const {
+      intent = "UNKNOWN",
+      customerName,
+      amount,
+      itemName,
+      quantity,
+      unit,
+      phoneNumber,
+      language = "hinglish"
+    } = aiResult;
 
-    if (intent === "SABKA_UDHAAR") {
-      const result = await getAllPendingUdhaar();
-
-      if (!result.customers.length) {
-        await sendTextMessage({
-          to: ownerWaId,
-          text: buildText(language, "NO_PENDING_ALL"),
-        });
-        return;
-      }
-
-      const lines = result.customers.map(
-        (item) => `${item.customerName}: ₹${formatAmount(item.total)}`,
-      );
-      const replyText =
-        buildText(language, "ALL_UDHAAR", {
-          lines: lines.join("\n"),
-          total: formatAmount(result.grandTotal),
-        });
-
-      await sendTextMessage({ to: ownerWaId, text: replyText });
-      return;
-    }
-
-    if (intent === "INVENTORY_ADD") {
-      const validItems = inventoryItems
-        .map((entry) => ({
-          itemName: String(entry?.itemName || "").trim(),
-          quantity: Number(entry?.quantity),
-          unit: String(entry?.unit || "").trim(),
-        }))
-        .filter((entry) => entry.itemName && Number.isFinite(entry.quantity) && entry.quantity > 0);
-      const hasMultiItems = validItems.length > 1;
-
-      if (!hasMultiItems && (!itemName || !Number.isFinite(quantity) || quantity <= 0)) {
-        await sendTextMessage({
-          to: ownerWaId,
-          text: buildText(language, "INVENTORY_ADD_ERROR"),
-        });
-        return;
-      }
-
-      if (hasMultiItems) {
-        const lines = [];
-        for (const entry of validItems) {
-          const normalizedItemName = await normalizeInventoryItemName(entry.itemName);
-          const row = await addInventoryStock({
-            itemName: normalizedItemName || entry.itemName,
-            quantity: entry.quantity,
-            unit: entry.unit,
+    // Handle different intents
+    try {
+      switch (intent) {
+        case "GREETING":
+          await sendTextMessage({
+            to: ownerWaId,
+            text: getTemplate(language, "GREETING")
           });
-          const quantityText = formatAmount(entry.quantity);
-          const totalText = formatAmount(row.quantity);
-          const unitText = row.unit ? ` ${row.unit}` : "";
-          lines.push(
-            buildText(language, "INVENTORY_ADD_MULTI_ITEM", {
-              itemName: row.item_name || entry.itemName,
-              quantity: quantityText,
-              totalQuantity: totalText,
-              unitText,
-            }),
-          );
-          const low = getLowStockAlertInfo(row);
-          if (low.isLow) {
+          break;
+
+        case "LOG_UDHAAR":
+          if (!customerName || !amount || amount <= 0) {
             await sendTextMessage({
               to: ownerWaId,
-              text: buildText(language, "LOW_STOCK_ALERT", {
-                itemName: low.itemName || (row.item_name || entry.itemName),
-                quantity: formatAmount(low.quantity),
-                unitText: low.unit ? ` ${low.unit}` : "",
-              }),
+              text: getErrorTemplate(language, 'NAME_REQUIRED')
+            });
+            return;
+          }
+          await logUdhaar({ customerName, amount });
+          const total = await getCustomerUdhaarTotal({ customerName });
+          await sendTextMessage({
+            to: ownerWaId,
+            text: getTemplate(language, "LOG_UDHAAR", {
+              name: customerName,
+              amount: formatAmount(amount),
+              total: formatAmount(total)
+            })
+          });
+          break;
+
+        case "CHECK_UDHAAR":
+          if (!customerName) {
+            await sendTextMessage({
+              to: ownerWaId,
+              text: getErrorTemplate(language, 'NAME_REQUIRED')
+            });
+            return;
+          }
+          const total = await getCustomerUdhaarTotal({ customerName });
+          await sendTextMessage({
+            to: ownerWaId,
+            text: getTemplate(language, "CHECK_UDHAAR", {
+              name: customerName,
+              total: formatAmount(total)
+            })
+          });
+          break;
+
+        case "LOG_WAPAS":
+          if (!customerName || !amount || amount <= 0) {
+            await sendTextMessage({
+              to: ownerWaId,
+              text: getErrorTemplate(language, 'NAME_REQUIRED')
+            });
+            return;
+          }
+          await logWapas({ customerName, amount });
+          const remaining = await getCustomerUdhaarTotal({ customerName });
+          await sendTextMessage({
+            to: ownerWaId,
+            text: getTemplate(language, "LOG_WAPAS", {
+              name: customerName,
+              amount: formatAmount(amount),
+              remaining: formatAmount(remaining)
+            })
+          });
+          break;
+
+        case "TODAY_HISAAB":
+          const today = await getTodayHisaab();
+          await sendTextMessage({
+            to: ownerWaId,
+            text: getTemplate(language, "TODAY_HISAAB", {
+              newUdhaar: formatAmount(today.newUdhaar),
+              wapasReceived: formatAmount(today.wapasReceived),
+              net: formatAmount(today.netUdhaar)
+            })
+          });
+          break;
+
+        case "SABKA_UDHAAR":
+          const result = await getAllPendingUdhaar();
+          if (!result.customers.length) {
+            await sendTextMessage({
+              to: ownerWaId,
+              text: getTemplate(language, "SABKA_UDHAAR", {
+                list: "No pending udhaar ✅",
+                total: "0"
+              })
+            });
+          } else {
+            const list = result.customers
+              .map(item => `${item.customerName}: ₹${formatAmount(item.total)}`)
+              .join("\n");
+            await sendTextMessage({
+              to: ownerWaId,
+              text: getTemplate(language, "SABKA_UDHAAR", {
+                list,
+                total: formatAmount(result.grandTotal)
+              })
             });
           }
-        }
-        await sendTextMessage({
-          to: ownerWaId,
-          text: buildText(language, "INVENTORY_ADD_MULTI", { lines: lines.join("\n") }),
-        });
-        return;
-      }
+          break;
 
-      const normalizedItemName = await normalizeInventoryItemName(itemName);
-      const row = await addInventoryStock({
-        itemName: normalizedItemName || itemName,
-        quantity,
-        unit,
-      });
-      const quantityText = formatAmount(quantity);
-      const totalText = formatAmount(row.quantity);
-      const unitText = row.unit ? ` ${row.unit}` : "";
+        case "INVENTORY_ADD":
+          if (!itemName || !quantity || quantity <= 0) {
+            await sendTextMessage({
+              to: ownerWaId,
+              text: getErrorTemplate(language, 'ITEM_REQUIRED')
+            });
+            return;
+          }
+          const row = await addInventoryStock({ itemName, quantity, unit });
+          const unitText = row.unit ? ` ${row.unit}` : "";
+          await sendTextMessage({
+            to: ownerWaId,
+            text: getTemplate(language, "INVENTORY_ADD", {
+              item: row.item_name || itemName,
+              qty: formatAmount(quantity),
+              unit: unitText,
+              total: formatAmount(row.quantity)
+            })
+          });
+          
+          // Check for low stock alert
+          const lowStock = getLowStockAlertInfo(row);
+          if (lowStock.isLow) {
+            await sendTextMessage({
+              to: ownerWaId,
+              text: getTemplate(language, "LOW_STOCK", {
+                item: lowStock.itemName,
+                qty: formatAmount(lowStock.quantity),
+                unit: lowStock.unit ? ` ${lowStock.unit}` : ""
+              })
+            });
+          }
+          break;
+
+        case "CHECK_STOCK":
+          if (!itemName) {
+            await sendTextMessage({
+              to: ownerWaId,
+              text: getErrorTemplate(language, 'ITEM_REQUIRED')
+            });
+            return;
+          }
+          const stock = await getInventoryStock({ itemName });
+          if (!stock) {
+            await sendTextMessage({
+              to: ownerWaId,
+              text: getTemplate(language, "CHECK_STOCK", {
+                item: itemName,
+                qty: "0",
+                unit: ""
+              })
+            });
+          } else {
+            const stockUnitText = stock.unit ? ` ${stock.unit}` : "";
+            await sendTextMessage({
+              to: ownerWaId,
+              text: getTemplate(language, "CHECK_STOCK", {
+                item: stock.item_name || itemName,
+                qty: formatAmount(stock.quantity),
+                unit: stockUnitText
+              })
+            });
+          }
+          break;
+
+        case "ALL_STOCK":
+          const allStock = await getAllInventoryStock();
+          if (!allStock.length) {
+            await sendTextMessage({
+              to: ownerWaId,
+              text: getTemplate(language, "ALL_STOCK", {
+                list: "Stock is empty 📭"
+              })
+            });
+          } else {
+            const stockList = allStock
+              .map(row => {
+                const qty = formatAmount(row.quantity);
+                const unit = row.unit ? ` ${row.unit}` : "";
+                return `${row.item_name}: ${qty}${unit}`;
+              })
+              .join("\n");
+            await sendTextMessage({
+              to: ownerWaId,
+              text: getTemplate(language, "ALL_STOCK", {
+                list: stockList
+              })
+            });
+          }
+          break;
+
+        case "SAVE_NUMBER":
+          if (!customerName || !phoneNumber) {
+            await sendTextMessage({
+              to: ownerWaId,
+              text: getErrorTemplate(language, 'PHONE_REQUIRED')
+            });
+            return;
+          }
+          await saveCustomerPhone({
+            customerName,
+            phone: normalizeCustomerPhone(phoneNumber)
+          });
+          await sendTextMessage({
+            to: ownerWaId,
+            text: getTemplate(language, "SAVE_NUMBER", {
+              name: customerName
+            })
+          });
+          break;
+
+        case "SEND_REMINDER":
+          if (!customerName) {
+            await sendTextMessage({
+              to: ownerWaId,
+              text: getErrorTemplate(language, 'NAME_REQUIRED')
+            });
+            return;
+          }
+          const customerPhone = await getCustomerPhone({ customerName });
+          if (!customerPhone) {
+            await sendTextMessage({
+              to: ownerWaId,
+              text: getErrorTemplate(language, 'PHONE_REQUIRED')
+            });
+            return;
+          }
+          const reminderTotal = await getCustomerUdhaarTotal({ customerName });
+          const reminderText = getTemplate(language, "REMINDER_CUSTOMER", {
+            customerName,
+            amount: formatAmount(reminderTotal)
+          });
+          await sendTextMessage({ to: customerPhone, text: reminderText });
+          await sendTextMessage({
+            to: ownerWaId,
+            text: getTemplate(language, "SEND_REMINDER", {
+              name: customerName,
+              total: formatAmount(reminderTotal)
+            })
+          });
+          break;
+
+        default:
+          await sendTextMessage({
+            to: ownerWaId,
+            text: getTemplate(language, "UNKNOWN")
+          });
+      }
+    } catch (error) {
+      console.error('Service operation failed:', error.message);
       await sendTextMessage({
         to: ownerWaId,
-        text: buildText(language, "INVENTORY_ADD_OK", {
-          itemName: row.item_name || itemName,
-          quantity: quantityText,
-          totalQuantity: totalText,
-          unitText,
-        }),
+        text: getErrorTemplate(language, 'DATABASE')
       });
-      const low = getLowStockAlertInfo(row);
-      if (low.isLow) {
-        await sendTextMessage({
-          to: ownerWaId,
-          text: buildText(language, "LOW_STOCK_ALERT", {
-            itemName: low.itemName || (row.item_name || itemName),
-            quantity: formatAmount(low.quantity),
-            unitText: low.unit ? ` ${low.unit}` : "",
-          }),
-        });
-      }
-      return;
     }
-
-    if (intent === "CHECK_STOCK") {
-      if (!itemName) {
-        await sendTextMessage({
-          to: ownerWaId,
-          text: buildText(language, "STOCK_CHECK_ERROR"),
-        });
-        return;
-      }
-
-      const normalizedItemName = await normalizeInventoryItemName(itemName);
-      const stock = await getInventoryStock({ itemName: normalizedItemName || itemName });
-      if (!stock) {
-        await sendTextMessage({
-          to: ownerWaId,
-          text: buildText(language, "STOCK_NOT_FOUND", { itemName }),
-        });
-        return;
-      }
-
-      const quantityText = formatAmount(stock.quantity);
-      const unitText = stock.unit ? ` ${stock.unit}` : "";
-      await sendTextMessage({
-        to: ownerWaId,
-        text: buildText(language, "STOCK_CHECK_OK", {
-          itemName: stock.item_name || itemName,
-          quantity: quantityText,
-          unitText,
-        }),
-      });
-      return;
-    }
-
-    if (intent === "ALL_STOCK") {
-      const rows = await getAllInventoryStock();
-      if (!rows.length) {
-        await sendTextMessage({
-          to: ownerWaId,
-          text: buildText(language, "ALL_STOCK_EMPTY"),
-        });
-        return;
-      }
-
-      const lines = rows.map((row) => {
-        const quantityText = formatAmount(row.quantity);
-        const unitText = row.unit ? ` ${row.unit}` : "";
-        return `${row.item_name}: ${quantityText}${unitText}`;
-      });
-
-      await sendTextMessage({
-        to: ownerWaId,
-        text: buildText(language, "ALL_STOCK", { lines: lines.join("\n") }),
-      });
-      return;
-    }
-
-    if (intent === "SAVE_NUMBER") {
-      if (!customerName || !phoneNumber) {
-        await sendTextMessage({
-          to: ownerWaId,
-          text: buildText(language, "SAVE_NUMBER_ERROR"),
-        });
-        return;
-      }
-
-      await saveCustomerPhone({
-        customerName,
-        phone: normalizeCustomerPhone(phoneNumber),
-      });
-      await sendTextMessage({
-        to: ownerWaId,
-        text: buildText(language, "SAVE_NUMBER_OK", { customerName }),
-      });
-      return;
-    }
-
-    if (intent === "SEND_REMINDER") {
-      if (!customerName) {
-        await sendTextMessage({
-          to: ownerWaId,
-          text: buildText(language, "REMINDER_NAME_ERROR"),
-        });
-        return;
-      }
-
-      const customerPhone = await getCustomerPhone({ customerName });
-      if (!customerPhone) {
-        await sendTextMessage({
-          to: ownerWaId,
-          text: buildText(language, "REMINDER_NO_PHONE", { customerName }),
-        });
-        return;
-      }
-
-      const total = await getCustomerUdhaarTotal({ customerName });
-      const reminderText = buildText(language, "REMINDER_CUSTOMER", {
-        customerName,
-        amount: formatAmount(total),
-      });
-
-      await sendTextMessage({ to: customerPhone, text: reminderText });
-      await sendTextMessage({
-        to: ownerWaId,
-        text: buildText(language, "REMINDER_OWNER_OK", { customerName }),
-      });
-      return;
-    }
-
-    if (intent === "CHECK_UDHAAR") {
-      if (!customerName) {
-        await sendTextMessage({
-          to: ownerWaId,
-          text: buildText(language, "CHECK_NAME_ERROR"),
-        });
-        return;
-      }
-
-      const total = await getCustomerUdhaarTotal({ customerName });
-      await sendTextMessage({
-        to: ownerWaId,
-        text: buildText(language, "CHECK_OK", {
-          customerName,
-          amount: formatAmount(total),
-        }),
-      });
-      return;
-    }
-
-    if (intent === "LOG_WAPAS") {
-      if (!customerName || !Number.isFinite(amount) || amount <= 0) {
-        await sendTextMessage({
-          to: ownerWaId,
-          text: buildText(language, "WAPAS_ERROR"),
-        });
-        return;
-      }
-
-      await logWapas({ customerName, amount });
-      const remainingTotal = await getCustomerUdhaarTotal({ customerName });
-      await sendTextMessage({
-        to: ownerWaId,
-        text: buildText(language, "WAPAS_OK", {
-          customerName,
-          amount: formatAmount(amount),
-          remaining: formatAmount(remainingTotal),
-        }),
-      });
-      return;
-    }
-
-    if (intent === "LOG_UDHAAR") {
-      if (!customerName || !Number.isFinite(amount) || amount <= 0) {
-        await sendTextMessage({
-          to: ownerWaId,
-          text: buildText(language, "UDHAAR_ERROR"),
-        });
-        return;
-      }
-
-      await logUdhaar({ customerName, amount });
-      const latestTotal = await getCustomerUdhaarTotal({ customerName });
-      await sendTextMessage({
-        to: ownerWaId,
-        text: buildText(language, "UDHAAR_OK", {
-          customerName,
-          amount: formatAmount(amount),
-          total: formatAmount(latestTotal),
-        }),
-      });
-      return;
-    }
-
-    await sendTextMessage({
-      to: ownerWaId,
-      text: buildText(language, "UNKNOWN"),
-    });
   } catch (error) {
-    console.error("Webhook processing error:", error.message);
+    console.error('Webhook processing error:', error.message);
+    // Always send some reply, never crash
+    const ownerWaId = req.body?.From;
+    if (ownerWaId) {
+      await sendTextMessage({
+        to: ownerWaId,
+        text: getErrorTemplate('hinglish', 'DATABASE')
+      });
+    }
   }
 }
 
