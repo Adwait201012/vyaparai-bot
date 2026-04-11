@@ -42,6 +42,7 @@ async function transcribeTwilioAudio({ mediaUrl, mediaContentType }) {
     const transcription = await client.audio.transcriptions.create({
       file: fs.createReadStream(tempFilePath),
       model: "whisper-large-v3-turbo",
+      language: "hi",
     });
 
     return String(transcription.text || "").trim();
