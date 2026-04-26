@@ -13,10 +13,11 @@ function normalizeCustomerName(customerName) {
 
 async function logUdhaar({ customerName, amount }) {
   try {
+    const normalizedName = normalizeCustomerName(customerName) || customerName;
     const { data, error } = await supabase
       .from("udhaar_logs")
       .insert([{
-        customer_name: customerName,
+        customer_name: normalizedName,
         amount: Number(amount),
       }])
       .select()
@@ -36,10 +37,11 @@ async function logUdhaar({ customerName, amount }) {
 
 async function logWapas({ customerName, amount }) {
   try {
+    const normalizedName = normalizeCustomerName(customerName) || customerName;
     const { data, error } = await supabase
       .from("udhaar_logs")
       .insert([{
-        customer_name: customerName,
+        customer_name: normalizedName,
         amount: -Math.abs(Number(amount)),
       }])
       .select()
@@ -254,7 +256,10 @@ async function getAllPendingUdhaar() {
 async function addInventoryStock({ itemName, quantity, unit }) {
   try {
     const normalizedItemName = String(itemName || "").trim().toLowerCase();
-    const normalizedUnit = String(unit || "pieces").trim().toLowerCase();
+    let normalizedUnit = String(unit || "pieces").trim().toLowerCase();
+    if (normalizedUnit === "null" || normalizedUnit === "") {
+      normalizedUnit = "pieces";
+    }
 
     // Check if item exists first
     const { data: existing, error: findError } = await supabase

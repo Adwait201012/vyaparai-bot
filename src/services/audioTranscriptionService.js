@@ -42,7 +42,7 @@ async function transcribeTwilioAudio({ mediaUrl, mediaContentType }) {
     const transcription = await client.audio.transcriptions.create({
       file: fs.createReadStream(tempFilePath),
       model: "whisper-large-v3-turbo",
-      language: "hi-IN",
+      prompt: "Transcribe in Hindi or English. If Hindi, use Devanagari script. Do not use Urdu.",
     });
 
     return String(transcription.text || "").trim();

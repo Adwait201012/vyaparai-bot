@@ -67,8 +67,8 @@ const TEMPLATES = {
     CHECK_EXPENSE: "💸 Kharcha summary:\n{list}\n📌 Total: ₹{total}",
     UNKNOWN: "🤔 Samajh nahi aaya. Hi bhejo to main sab features dikhaunga!",
     ERRORS: {
-      NETWORK: "Thoda network issue hai, dobara try karo!",
-      DATABASE: "Database mein dikkat hai, 1 minute mein try karo!",
+      NETWORK: "Network issue, try again!",
+      DATABASE: "Database error, try again in 1 minute!",
       NAME_REQUIRED: "Customer name required!",
       AMOUNT_REQUIRED: "Amount required!",
       ITEM_REQUIRED: "Item name required!",
@@ -93,8 +93,8 @@ const TEMPLATES = {
     CHECK_EXPENSE: "💸 Expense summary:\n{list}\n📌 Total: ₹{total}",
     UNKNOWN: "🤔 Could not understand. Send 'hi' to see all features!",
     ERRORS: {
-      NETWORK: "Network issue, please try again!",
-      DATABASE: "Database issue, please try again in 1 minute!",
+      NETWORK: "Network issue, try again!",
+      DATABASE: "Database error, try again in 1 minute!",
       NAME_REQUIRED: "Customer name required!",
       AMOUNT_REQUIRED: "Amount required!",
       ITEM_REQUIRED: "Item name required!",
@@ -119,8 +119,8 @@ const TEMPLATES = {
     CHECK_EXPENSE: "💸 खर्चा सारांश:\n{list}\n📌 कुल: ₹{total}",
     UNKNOWN: "🤔 समझ नहीं आया। हाय भेजें तो मैं सभी फीचर्स दिखाऊंगा!",
     ERRORS: {
-      NETWORK: "थोड़ा network issue है, दोबारा try करो!",
-      DATABASE: "Database में दिक्कत है, 1 minute में try करो!",
+      NETWORK: "Network issue, try again!",
+      DATABASE: "Database error, try again in 1 minute!",
       NAME_REQUIRED: "ग्राहक नाम आवश्यक!",
       AMOUNT_REQUIRED: "राशि आवश्यक!",
       ITEM_REQUIRED: "आइटम नाम आवश्यक!",
