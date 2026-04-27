@@ -225,7 +225,8 @@ async function getAllPendingUdhaar() {
   try {
     const { data, error } = await supabase
       .from("udhaar_logs")
-      .select("customer_name,amount");
+      .select("customer_name,amount,created_at")
+      .order("created_at", { ascending: false });
 
     if (error) {
       console.error('Supabase fetch failed:', error.message);
