@@ -256,7 +256,7 @@ async function getAllPendingUdhaar() {
 
 async function addInventoryStock({ itemName, quantity, unit }) {
   try {
-    // Normalize via Groq first so all variants of the same product merge
+    // Step 1: Normalize via Groq so all variants of the same product merge
     const normalizedItemName = await normalizeItemNameWithGroq(itemName) ||
       String(itemName || "").trim().toLowerCase();
 
@@ -265,7 +265,9 @@ async function addInventoryStock({ itemName, quantity, unit }) {
       normalizedUnit = "pieces";
     }
 
-    // Check if item exists first
+    console.log(`[Inventory] ADD → normalized: "${normalizedItemName}", qty: ${quantity}, unit: ${normalizedUnit}`);
+
+    // Step 2: Search Supabase using normalized name
     const { data: existing, error: findError } = await supabase
       .from("inventory")
       .select("id,item_name,quantity,unit,low_stock_threshold")
@@ -279,8 +281,10 @@ async function addInventoryStock({ itemName, quantity, unit }) {
     }
 
     if (existing?.id) {
-      // UPDATE existing quantity by adding
+      // Step 3a: Found → UPDATE quantity
       const nextQuantity = Number(existing.quantity || 0) + Number(quantity || 0);
+      console.log(`[Inventory] MERGE → existing "${existing.item_name}" (id:${existing.id}), qty ${existing.quantity} + ${quantity} = ${nextQuantity}`);
+
       const { data, error: updateError } = await supabase
         .from("inventory")
         .update({
@@ -298,7 +302,9 @@ async function addInventoryStock({ itemName, quantity, unit }) {
 
       return data;
     } else {
-      // INSERT new row
+      // Step 3b: Not found → INSERT with normalized name (never raw input)
+      console.log(`[Inventory] INSERT → "${normalizedItemName}" qty: ${quantity}`);
+
       const { data, error } = await supabase
         .from("inventory")
         .insert([{

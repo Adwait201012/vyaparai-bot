@@ -75,14 +75,25 @@ async function normalizeItemNameWithGroq(itemName) {
         { role: "user", content: rawName },
       ],
     });
-    const result = (completion.choices?.[0]?.message?.content || "").trim().toLowerCase();
-    // Safety: if result is empty or suspiciously long, fall back to basic normalize
+    let result = (completion.choices?.[0]?.message?.content || "").trim().toLowerCase();
+
+    // Strip surrounding quotes that LLM sometimes adds: "lays red" → lays red
+    result = result.replace(/^['"]+|['"]+$/g, "").trim();
+    // Strip trailing punctuation: lays red. → lays red
+    result = result.replace(/[.,!?]+$/, "").trim();
+    // Collapse any internal extra spaces
+    result = result.replace(/\s+/g, " ").trim();
+
+    // Safety: if result is empty or suspiciously long, fall back
     if (!result || result.length > 60) {
+      console.warn(`[ItemNorm] Groq gave bad result for "${rawName}", using fallback`);
       return normalizeItemName(rawName);
     }
+
+    console.log(`[ItemNorm] "${rawName}" → "${result}"`);
     return result;
   } catch (err) {
-    console.error("normalizeItemNameWithGroq failed, using fallback:", err.message);
+    console.error(`[ItemNorm] Groq call failed for "${rawName}", using fallback:`, err.message);
     return normalizeItemName(rawName);
   }
 }
