@@ -40,7 +40,7 @@ Language rule:
 
 Pure Hindi Devanagari script → hindi
 Pure English → english
-Mixed Hindi+English → hinglish
+Hindi written in English alphabet / Mixed → hinglish
 Always return the detected language`;
 
 const ITEM_NORMALIZATION_PROMPT = `Normalize this product name to a short standard form. Rules:
@@ -199,7 +199,7 @@ async function detectIntent(messageText) {
   // right before the Supabase call so it applies to ALL inventory paths.
   return {
     intent: parsed.intent || "UNKNOWN",
-    customerName: parsed.customerName ? normalizeCustomerName(parsed.customerName) : null,
+    customerName: parsed.customerName ? String(parsed.customerName).trim() : null,
     amount: parsed.amount ? Number(parsed.amount) : null,
     itemName: parsed.itemName ? normalizeItemName(parsed.itemName) : null,
     quantity: parsed.quantity ? Number(parsed.quantity) : null,

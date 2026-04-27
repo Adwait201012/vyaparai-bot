@@ -35,7 +35,7 @@ async function logUdhaar({ customerName, amount }) {
     const { data, error } = await supabase
       .from("udhaar_logs")
       .insert([{
-        customer_name: normalizedName,
+        customer_name: customerName,
         amount: Number(amount),
       }])
       .select()
@@ -59,7 +59,7 @@ async function logWapas({ customerName, amount }) {
     const { data, error } = await supabase
       .from("udhaar_logs")
       .insert([{
-        customer_name: normalizedName,
+        customer_name: customerName,
         amount: -Math.abs(Number(amount)),
       }])
       .select()
