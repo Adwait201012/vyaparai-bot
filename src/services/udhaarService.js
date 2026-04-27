@@ -2,6 +2,23 @@ const { supabase } = require("../config/supabase");
 const { normalizeItemNameWithGroq } = require("./aiExtractionService");
 const DEFAULT_LOW_STOCK_THRESHOLD = 10;
 
+// Words that Groq sometimes incorrectly extracts as a unit — always invalid
+const INVALID_UNITS = new Set([
+  "aaya", "aai", "aya", "mila", "mili", "aaye", "laya", "laye",
+  "diya", "diye", "liya", "liye", "hua", "hui", "hue",
+  "received", "bought", "added", "came", "arrived",
+  "null", "undefined", "none", "n/a", ""
+]);
+
+// Sanitize a unit string: reject verbs/junk, fall back to "pieces"
+function sanitizeUnit(unit) {
+  const raw = String(unit || "").trim().toLowerCase();
+  if (INVALID_UNITS.has(raw)) {
+    return "pieces";
+  }
+  return raw || "pieces";
+}
+
 function normalizeCustomerName(customerName) {
   if (!customerName) return null;
   return String(customerName)
@@ -261,10 +278,8 @@ async function addInventoryStock({ itemName, quantity, unit }) {
     const normalizedItemName = await normalizeItemNameWithGroq(itemName) ||
       String(itemName || "").trim().toLowerCase();
 
-    let normalizedUnit = String(unit || "pieces").trim().toLowerCase();
-    if (normalizedUnit === "null" || normalizedUnit === "") {
-      normalizedUnit = "pieces";
-    }
+    // Sanitize unit: reject Hindi verbs (aaya, mila, etc.) and other non-unit words
+    const normalizedUnit = sanitizeUnit(unit);
 
     console.log(`[Inventory] ADD → raw: "${itemName}" → normalized: "${normalizedItemName}", qty: ${quantity}, unit: ${normalizedUnit}`);
 
