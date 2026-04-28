@@ -551,6 +551,37 @@ async function getMonthlyExpenses({ ownerPhone }) {
   }
 }
 
+async function deleteAllOwnerData({ ownerPhone }) {
+  try {
+    // Delete from all 4 tables in parallel
+    const [udhaarResult, inventoryResult, customersResult, expensesResult] = await Promise.all([
+      supabase.from("udhaar_logs").delete().eq("owner_phone", ownerPhone),
+      supabase.from("inventory").delete().eq("owner_phone", ownerPhone),
+      supabase.from("customers").delete().eq("owner_phone", ownerPhone),
+      supabase.from("expenses").delete().eq("owner_phone", ownerPhone),
+    ]);
+
+    // Check for errors in any table
+    const errors = [
+      udhaarResult.error,
+      inventoryResult.error,
+      customersResult.error,
+      expensesResult.error,
+    ].filter(Boolean);
+
+    if (errors.length > 0) {
+      console.error('deleteAllOwnerData partial errors:', errors.map(e => e.message));
+      throw new Error('Database error during delete. Try again!');
+    }
+
+    console.log(`[RESET] All data deleted for owner: ${ownerPhone}`);
+    return true;
+  } catch (error) {
+    console.error('deleteAllOwnerData error:', error.message);
+    throw error;
+  }
+}
+
 module.exports = {
   logUdhaar,
   logWapas,
@@ -567,4 +598,5 @@ module.exports = {
   logExpense,
   getTodayExpenses,
   getMonthlyExpenses,
+  deleteAllOwnerData,
 };

@@ -17,12 +17,20 @@ const {
   logExpense,
   getTodayExpenses,
   getMonthlyExpenses,
+  deleteAllOwnerData,
 } = require("../services/udhaarService");
 const { sendTextMessage } = require("../services/whatsappService");
 const {
   isAudioMedia,
   transcribeTwilioAudio,
 } = require("../services/audioTranscriptionService");
+
+// In-memory map to track users who have requested data deletion and are pending confirmation.
+// Key: owner WhatsApp ID, Value: { timestamp: Date.now(), language: string }
+// Entries expire after 2 minutes to prevent stale confirmations.
+const pendingDeleteConfirmation = new Map();
+const DELETE_CONFIRM_PHRASE = "HAAN DELETE KARO";
+const DELETE_CONFIRM_EXPIRY_MS = 2 * 60 * 1000; // 2 minutes
 
 const verifyWebhook = (req, res) => {
   res.status(200).send("Twilio webhook is active");
@@ -79,6 +87,9 @@ const TEMPLATES = {
     SEND_REMINDER: "✅ {name} ko reminder bhej diya!\n💰 Udhaar: ₹{total}",
     LOG_EXPENSE: "✅ Kharcha noted!\n💸 {category}: ₹{amount}\n📌 Aaj ka total kharcha: ₹{total}",
     CHECK_EXPENSE: "💸 Kharcha summary:\n{list}\n📌 Total: ₹{total}",
+    RESET_CONFIRM: "⚠️ Kya aap sure hain? Aapka SABKA data delete ho jayega.\nConfirm karne ke liye 'HAAN DELETE KARO' bhejo",
+    RESET_DONE: "✅ Aapka sabka data delete ho gaya! Fresh start!",
+    RESET_CANCEL: "Delete cancel kar diya! Aapka data safe hai ✅",
     UNKNOWN: "🤔 Samajh nahi aaya. Hi bhejo to main sab features dikhaunga!",
     ERRORS: {
       NETWORK: "Network issue, try again!",
@@ -105,6 +116,9 @@ const TEMPLATES = {
     SEND_REMINDER: "✅ Reminder sent to {name}!\n💰 Credit: ₹{total}",
     LOG_EXPENSE: "✅ Expense noted!\n💸 {category}: ₹{amount}\n📌 Today's total expense: ₹{total}",
     CHECK_EXPENSE: "💸 Expense summary:\n{list}\n📌 Total: ₹{total}",
+    RESET_CONFIRM: "⚠️ Are you sure? ALL your data will be deleted.\nTo confirm, send 'HAAN DELETE KARO'",
+    RESET_DONE: "✅ All your data has been deleted! Fresh start!",
+    RESET_CANCEL: "Delete cancelled! Your data is safe ✅",
     UNKNOWN: "🤔 Could not understand. Send 'hi' to see all features!",
     ERRORS: {
       NETWORK: "Network issue, try again!",
@@ -131,6 +145,9 @@ const TEMPLATES = {
     SEND_REMINDER: "✅ {name} को रिमाइंडर भेज दिया!\n💰 उधार: ₹{total}",
     LOG_EXPENSE: "✅ खर्चा नोट किया!\n💸 {category}: ₹{amount}\n📌 आज का कुल खर्चा: ₹{total}",
     CHECK_EXPENSE: "💸 खर्चा सारांश:\n{list}\n📌 कुल: ₹{total}",
+    RESET_CONFIRM: "⚠️ क्या आप पक्के हैं? आपका सारा डेटा डिलीट हो जाएगा।\nConfirm करने के लिए 'HAAN DELETE KARO' भेजें",
+    RESET_DONE: "✅ आपका सारा डेटा डिलीट हो गया! नई शुरुआत!",
+    RESET_CANCEL: "डिलीट कैंसिल! आपका डेटा सुरक्षित है ✅",
     UNKNOWN: "🤔 समझ नहीं आया। हाय भेजें तो मैं सभी फीचर्स दिखाऊंगा!",
     ERRORS: {
       NETWORK: "Network issue, try again!",
@@ -192,6 +209,46 @@ async function receiveWebhook(req, res) {
     }
 
     if (!ownerWaId || !text) {
+      return;
+    }
+
+    // ── RESET_DATA confirmation check ──────────────────────────────
+    // If this user has a pending delete confirmation, check their reply
+    // BEFORE running Groq intent detection.
+    if (pendingDeleteConfirmation.has(ownerWaId)) {
+      const pending = pendingDeleteConfirmation.get(ownerWaId);
+      pendingDeleteConfirmation.delete(ownerWaId); // always clear, one-shot
+
+      // Check if confirmation has expired
+      if (Date.now() - pending.timestamp > DELETE_CONFIRM_EXPIRY_MS) {
+        await sendTextMessage({
+          to: ownerWaId,
+          text: getTemplate(pending.language || 'hinglish', 'RESET_CANCEL')
+        });
+        return;
+      }
+
+      const upperText = text.toUpperCase().trim();
+      if (upperText === DELETE_CONFIRM_PHRASE) {
+        try {
+          await deleteAllOwnerData({ ownerPhone: ownerWaId });
+          await sendTextMessage({
+            to: ownerWaId,
+            text: getTemplate(pending.language || 'hinglish', 'RESET_DONE')
+          });
+        } catch (error) {
+          console.error('deleteAllOwnerData failed:', error.message);
+          await sendTextMessage({
+            to: ownerWaId,
+            text: getErrorTemplate(pending.language || 'hinglish', 'DATABASE')
+          });
+        }
+      } else {
+        await sendTextMessage({
+          to: ownerWaId,
+          text: getTemplate(pending.language || 'hinglish', 'RESET_CANCEL')
+        });
+      }
       return;
     }
 
@@ -513,6 +570,18 @@ async function receiveWebhook(req, res) {
               })
             });
           }
+          break;
+
+        case "RESET_DATA":
+          // Store pending confirmation — actual deletion happens on next message
+          pendingDeleteConfirmation.set(ownerWaId, {
+            timestamp: Date.now(),
+            language
+          });
+          await sendTextMessage({
+            to: ownerWaId,
+            text: getTemplate(language, "RESET_CONFIRM")
+          });
           break;
 
         default:
