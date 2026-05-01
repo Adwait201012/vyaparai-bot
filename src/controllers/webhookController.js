@@ -335,19 +335,20 @@ async function receiveWebhook(req, res) {
           }
           await logWapas({ customerName, amount, ownerPhone: ownerWaId });
           const remaining = await getCustomerUdhaarTotal({ customerName, ownerPhone: ownerWaId });
+          const safeRemaining = Math.max(0, remaining);
           await sendTextMessage({
             to: ownerWaId,
             text: getTemplate(language, "LOG_WAPAS", {
               name: customerName,
               amount: formatAmount(amount),
-              remaining: formatAmount(remaining)
+              remaining: formatAmount(safeRemaining)
             })
           });
           break;
 
         case "TODAY_HISAAB":
           const today = await getTodayHisaab({ ownerPhone: ownerWaId });
-          const netBalance = today.wapasReceived - today.newUdhaar - today.totalExpenses;
+          const netBalance = today.wapasReceived - today.totalExpenses;
           await sendTextMessage({
             to: ownerWaId,
             text: getTemplate(language, "TODAY_HISAAB", {
