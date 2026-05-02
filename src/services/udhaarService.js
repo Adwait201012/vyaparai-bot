@@ -31,10 +31,20 @@ const HINDI_TRANSLITERATION_MAP = {
   "अग्रवाल": "agarwal",
   "तिवारी": "tiwari",
   "चौधरी": "chaudhary",
+  "राम": "ram",
+  "श्याम": "shyam",
+  "राज": "raj",
+  "सुरेश": "suresh",
+  "रमेश": "ramesh",
+  "महेश": "mahesh",
+  "दिनेश": "dinesh",
+  "मोहन": "mohan",
+  "सोहन": "sohan",
   "जी": "ji",
   "भाई": "bhai",
   "देवी": "devi",
-  "साहब": "sahab"
+  "साहब": "sahab",
+  "श्री": "shree"
 };
 
 function normalizeCustomerName(customerName) {
@@ -48,7 +58,7 @@ function normalizeCustomerName(customerName) {
 
   return name
     .toLowerCase()
-    .replace(/\b(ji|bhai|ben|devi|sahab|sir|mr|mrs|ms)\b/gi, " ")
+    .replace(/\b(ji|bhai|ben|devi|sahab|sir|mr|mrs|ms|shree)\b/gi, " ")
     .replace(/[^\p{L}\p{N}\s]/gu, " ")
     .replace(/\s+/g, " ")
     .trim();
