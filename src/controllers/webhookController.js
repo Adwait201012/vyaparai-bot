@@ -20,6 +20,8 @@ const {
   deleteAllOwnerData,
   resolveOwnerPhone,
   addEmployee,
+  isShopRegistered,
+  registerShop,
 } = require("../services/udhaarService");
 const { sendTextMessage } = require("../services/whatsappService");
 const {
@@ -33,6 +35,17 @@ const {
 const pendingDeleteConfirmation = new Map();
 const DELETE_CONFIRM_PHRASE = "HAAN DELETE KARO";
 const DELETE_CONFIRM_EXPIRY_MS = 2 * 60 * 1000; // 2 minutes
+
+// In-memory map for two-step shop registration flow.
+// Key: senderPhone (ownerWaId), Value: { timestamp: Date.now() }
+// Once a user sends a registration trigger, we ask for shop name;
+// their NEXT message is treated as the shop name.
+const pendingShopName = new Map();
+const REGISTRATION_EXPIRY_MS = 5 * 60 * 1000; // 5 minutes
+
+// Regex to detect registration intent without calling Groq
+const REGISTRATION_TRIGGER_RE =
+  /\b(register\s*karo|shop\s*add\s*karo|shuru\s*karo|register|start)\b/i;
 
 const verifyWebhook = (req, res) => {
   res.status(200).send("Twilio webhook is active");
@@ -215,6 +228,67 @@ async function receiveWebhook(req, res) {
     }
 
     const resolvedOwnerPhone = await resolveOwnerPhone(ownerWaId);
+
+    // ── REGISTRATION GATE ─────────────────────────────────────────
+    // Step A: If user is mid-registration (we asked for shop name), treat
+    //         their next message as the shop name.
+    if (pendingShopName.has(ownerWaId)) {
+      const pending = pendingShopName.get(ownerWaId);
+      pendingShopName.delete(ownerWaId); // always clear, one-shot
+
+      if (Date.now() - pending.timestamp > REGISTRATION_EXPIRY_MS) {
+        await sendTextMessage({
+          to: ownerWaId,
+          text: "Registration timeout ho gayi. Dobara 'Register karo' bhejo."
+        });
+        return;
+      }
+
+      const shopName = text.trim();
+      if (!shopName) {
+        await sendTextMessage({
+          to: ownerWaId,
+          text: "Shop ka naam nahi mila. Dobara 'Register karo' bhejo aur phir shop ka naam bhejo."
+        });
+        return;
+      }
+
+      try {
+        await registerShop({ ownerPhone: ownerWaId, shopName });
+        await sendTextMessage({
+          to: ownerWaId,
+          text: `Welcome! ${shopName} ab BharatBahi par registered hai. 🎉\nAb aap udhaar, stock, kharcha sab track kar sakte ho!`
+        });
+      } catch (err) {
+        await sendTextMessage({
+          to: ownerWaId,
+          text: err.message || "Registration nahi ho payi. Dobara try karo."
+        });
+      }
+      return;
+    }
+
+    // Step B: Check if this owner_phone is registered at all.
+    //         Employees resolve to their owner's phone, so a registered
+    //         employee will pass this gate automatically.
+    const registered = await isShopRegistered(resolvedOwnerPhone);
+    if (!registered) {
+      if (REGISTRATION_TRIGGER_RE.test(text)) {
+        // User wants to register — ask for shop name (step 2)
+        pendingShopName.set(ownerWaId, { timestamp: Date.now() });
+        await sendTextMessage({
+          to: ownerWaId,
+          text: "Apni shop ka naam kya hai? (sirf naam bhejo, jaise: Sharma General Store)"
+        });
+      } else {
+        await sendTextMessage({
+          to: ownerWaId,
+          text: "Pehle register karo — 'Register karo [aapki shop ka naam]' bhejo.\nExample: Register karo Sharma General Store"
+        });
+      }
+      return;
+    }
+    // ── END REGISTRATION GATE ────────────────────────────────────
 
     // ── RESET_DATA confirmation check ──────────────────────────────
     // If this user has a pending delete confirmation, check their reply

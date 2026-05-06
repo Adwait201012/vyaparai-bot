@@ -64,7 +64,6 @@ function normalizeCustomerName(customerName) {
     .trim();
 }
 
-}
 
 async function resolveOwnerPhone(senderPhone) {
   try {
@@ -76,30 +75,66 @@ async function resolveOwnerPhone(senderPhone) {
 
     if (error) {
       console.error('Supabase fetch failed for resolveOwnerPhone:', error.message);
-      // Fallback to treating sender as owner if error
-      return senderPhone;
+      return senderPhone; // Fail-open: treat as own owner
     }
 
+    // If found as an employee, return the shop owner's phone
     if (data && data.shop_owner_phone) {
       return data.shop_owner_phone;
     }
 
-    // Not found in employees, they are their own owner
-    // Add them to the table as an owner
-    try {
-      await supabase.from("shop_employees").insert([{
-        shop_owner_phone: senderPhone,
-        employee_phone: senderPhone,
-        employee_name: "Owner"
-      }]);
-    } catch (insertErr) {
-      console.error('Failed to auto-register owner:', insertErr.message);
-    }
-    
+    // Not in shop_employees at all — return as-is (they may be unregistered)
     return senderPhone;
   } catch (error) {
     console.error('resolveOwnerPhone error:', error.message);
     return senderPhone;
+  }
+}
+
+async function isShopRegistered(ownerPhone) {
+  try {
+    const { data, error } = await supabase
+      .from("registered_shops")
+      .select("id")
+      .eq("owner_phone", ownerPhone)
+      .maybeSingle();
+
+    if (error) {
+      console.error('Supabase fetch failed for isShopRegistered:', error.message);
+      return false;
+    }
+    return !!data;
+  } catch (error) {
+    console.error('isShopRegistered error:', error.message);
+    return false;
+  }
+}
+
+async function registerShop({ ownerPhone, shopName }) {
+  try {
+    // Insert into registered_shops
+    const { error: shopError } = await supabase
+      .from("registered_shops")
+      .insert([{ owner_phone: ownerPhone, shop_name: shopName }]);
+
+    if (shopError) {
+      console.error('Supabase insert failed for registerShop:', shopError.message);
+      if (shopError.code === '23505') {
+        throw new Error('Yeh number pehle se registered hai!');
+      }
+      throw new Error('Database error. Try again!');
+    }
+
+    // Also insert owner as their own employee so resolveOwnerPhone works going forward
+    await supabase.from("shop_employees").upsert(
+      [{ shop_owner_phone: ownerPhone, employee_phone: ownerPhone, employee_name: "Owner" }],
+      { onConflict: "employee_phone" }
+    );
+
+    return true;
+  } catch (error) {
+    console.error('registerShop error:', error.message);
+    throw error;
   }
 }
 
@@ -740,4 +775,6 @@ module.exports = {
   deleteAllOwnerData,
   resolveOwnerPhone,
   addEmployee,
+  isShopRegistered,
+  registerShop,
 };
