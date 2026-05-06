@@ -64,6 +64,72 @@ function normalizeCustomerName(customerName) {
     .trim();
 }
 
+}
+
+async function resolveOwnerPhone(senderPhone) {
+  try {
+    const { data, error } = await supabase
+      .from("shop_employees")
+      .select("shop_owner_phone")
+      .eq("employee_phone", senderPhone)
+      .maybeSingle();
+
+    if (error) {
+      console.error('Supabase fetch failed for resolveOwnerPhone:', error.message);
+      // Fallback to treating sender as owner if error
+      return senderPhone;
+    }
+
+    if (data && data.shop_owner_phone) {
+      return data.shop_owner_phone;
+    }
+
+    // Not found in employees, they are their own owner
+    // Add them to the table as an owner
+    try {
+      await supabase.from("shop_employees").insert([{
+        shop_owner_phone: senderPhone,
+        employee_phone: senderPhone,
+        employee_name: "Owner"
+      }]);
+    } catch (insertErr) {
+      console.error('Failed to auto-register owner:', insertErr.message);
+    }
+    
+    return senderPhone;
+  } catch (error) {
+    console.error('resolveOwnerPhone error:', error.message);
+    return senderPhone;
+  }
+}
+
+async function addEmployee({ ownerPhone, employeePhone, employeeName }) {
+  try {
+    const { data, error } = await supabase
+      .from("shop_employees")
+      .insert([{
+        shop_owner_phone: ownerPhone,
+        employee_phone: employeePhone,
+        employee_name: employeeName
+      }])
+      .select()
+      .single();
+
+    if (error) {
+      console.error('Supabase insert failed for addEmployee:', error.message);
+      if (error.code === '23505') { // Unique violation
+        throw new Error('Employee pehle se added hai!');
+      }
+      throw new Error('Database error. Try again!');
+    }
+
+    return data;
+  } catch (error) {
+    console.error('addEmployee error:', error.message);
+    throw error;
+  }
+}
+
 async function logUdhaar({ customerName, amount, ownerPhone }) {
   try {
     const { data, error } = await supabase
@@ -672,4 +738,6 @@ module.exports = {
   getTodayExpenses,
   getMonthlyExpenses,
   deleteAllOwnerData,
+  resolveOwnerPhone,
+  addEmployee,
 };

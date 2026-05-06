@@ -18,6 +18,8 @@ const {
   getTodayExpenses,
   getMonthlyExpenses,
   deleteAllOwnerData,
+  resolveOwnerPhone,
+  addEmployee,
 } = require("../services/udhaarService");
 const { sendTextMessage } = require("../services/whatsappService");
 const {
@@ -212,6 +214,8 @@ async function receiveWebhook(req, res) {
       return;
     }
 
+    const resolvedOwnerPhone = await resolveOwnerPhone(ownerWaId);
+
     // ── RESET_DATA confirmation check ──────────────────────────────
     // If this user has a pending delete confirmation, check their reply
     // BEFORE running Groq intent detection.
@@ -231,7 +235,7 @@ async function receiveWebhook(req, res) {
       const upperText = text.toUpperCase().trim();
       if (upperText === DELETE_CONFIRM_PHRASE) {
         try {
-          await deleteAllOwnerData({ ownerPhone: ownerWaId });
+          await deleteAllOwnerData({ ownerPhone: resolvedOwnerPhone });
           await sendTextMessage({
             to: ownerWaId,
             text: getTemplate(pending.language || 'hinglish', 'RESET_DONE')
@@ -274,6 +278,8 @@ async function receiveWebhook(req, res) {
       unit,
       phoneNumber,
       expenseCategory,
+      employeeName,
+      employeePhone,
       language = "hinglish"
     } = aiResult;
 
@@ -295,8 +301,8 @@ async function receiveWebhook(req, res) {
             });
             return;
           }
-          await logUdhaar({ customerName, amount, ownerPhone: ownerWaId });
-          const total = await getCustomerUdhaarTotal({ customerName, ownerPhone: ownerWaId });
+          await logUdhaar({ customerName, amount, ownerPhone: resolvedOwnerPhone });
+          const total = await getCustomerUdhaarTotal({ customerName, ownerPhone: resolvedOwnerPhone });
           await sendTextMessage({
             to: ownerWaId,
             text: getTemplate(language, "LOG_UDHAAR", {
@@ -315,7 +321,7 @@ async function receiveWebhook(req, res) {
             });
             return;
           }
-          const remainingTotal = await getCustomerUdhaarTotal({ customerName, ownerPhone: ownerWaId });
+          const remainingTotal = await getCustomerUdhaarTotal({ customerName, ownerPhone: resolvedOwnerPhone });
           await sendTextMessage({
             to: ownerWaId,
             text: getTemplate(language, "CHECK_UDHAAR", {
@@ -333,8 +339,8 @@ async function receiveWebhook(req, res) {
             });
             return;
           }
-          await logWapas({ customerName, amount, ownerPhone: ownerWaId });
-          const remaining = await getCustomerUdhaarTotal({ customerName, ownerPhone: ownerWaId });
+          await logWapas({ customerName, amount, ownerPhone: resolvedOwnerPhone });
+          const remaining = await getCustomerUdhaarTotal({ customerName, ownerPhone: resolvedOwnerPhone });
           const safeRemaining = Math.max(0, remaining);
           await sendTextMessage({
             to: ownerWaId,
@@ -347,7 +353,7 @@ async function receiveWebhook(req, res) {
           break;
 
         case "TODAY_HISAAB":
-          const today = await getTodayHisaab({ ownerPhone: ownerWaId });
+          const today = await getTodayHisaab({ ownerPhone: resolvedOwnerPhone });
           const netBalance = today.wapasReceived - today.totalExpenses;
           await sendTextMessage({
             to: ownerWaId,
@@ -362,7 +368,7 @@ async function receiveWebhook(req, res) {
           break;
 
         case "SABKA_UDHAAR":
-          const result = await getAllPendingUdhaar({ ownerPhone: ownerWaId });
+          const result = await getAllPendingUdhaar({ ownerPhone: resolvedOwnerPhone });
           if (!result.customers.length) {
             await sendTextMessage({
               to: ownerWaId,
@@ -393,7 +399,7 @@ async function receiveWebhook(req, res) {
             });
             return;
           }
-          const row = await addInventoryStock({ itemName, quantity, unit, ownerPhone: ownerWaId });
+          const row = await addInventoryStock({ itemName, quantity, unit, ownerPhone: resolvedOwnerPhone });
           await sendTextMessage({
             to: ownerWaId,
             text: getTemplate(language, "INVENTORY_ADD", {
@@ -427,7 +433,7 @@ async function receiveWebhook(req, res) {
             });
             return;
           }
-          const stock = await getInventoryStock({ itemName, ownerPhone: ownerWaId });
+          const stock = await getInventoryStock({ itemName, ownerPhone: resolvedOwnerPhone });
           if (!stock) {
             await sendTextMessage({
               to: ownerWaId,
@@ -450,7 +456,7 @@ async function receiveWebhook(req, res) {
           break;
 
         case "ALL_STOCK":
-          const allStock = await getAllInventoryStock({ ownerPhone: ownerWaId });
+          const allStock = await getAllInventoryStock({ ownerPhone: resolvedOwnerPhone });
           if (!allStock.length) {
             await sendTextMessage({
               to: ownerWaId,
@@ -486,7 +492,7 @@ async function receiveWebhook(req, res) {
           await saveCustomerPhone({
             customerName,
             phone: normalizeCustomerPhone(phoneNumber),
-            ownerPhone: ownerWaId
+            ownerPhone: resolvedOwnerPhone
           });
           await sendTextMessage({
             to: ownerWaId,
@@ -504,7 +510,7 @@ async function receiveWebhook(req, res) {
             });
             return;
           }
-          const customerPhone = await getCustomerPhone({ customerName, ownerPhone: ownerWaId });
+          const customerPhone = await getCustomerPhone({ customerName, ownerPhone: resolvedOwnerPhone });
           if (!customerPhone) {
             await sendTextMessage({
               to: ownerWaId,
@@ -512,7 +518,7 @@ async function receiveWebhook(req, res) {
             });
             return;
           }
-          const reminderTotal = await getCustomerUdhaarTotal({ customerName, ownerPhone: ownerWaId });
+          const reminderTotal = await getCustomerUdhaarTotal({ customerName, ownerPhone: resolvedOwnerPhone });
           const reminderText = getTemplate(language, "REMINDER_CUSTOMER", {
             customerName,
             amount: formatAmount(reminderTotal)
@@ -539,9 +545,9 @@ async function receiveWebhook(req, res) {
             category: expenseCategory || "general", 
             amount, 
             description: expenseCategory || "general",
-            ownerPhone: ownerWaId
+            ownerPhone: resolvedOwnerPhone
           });
-          const todayExpenses = await getTodayExpenses({ ownerPhone: ownerWaId });
+          const todayExpenses = await getTodayExpenses({ ownerPhone: resolvedOwnerPhone });
           await sendTextMessage({
             to: ownerWaId,
             text: getTemplate(language, "LOG_EXPENSE", {
@@ -553,7 +559,7 @@ async function receiveWebhook(req, res) {
           break;
 
         case "CHECK_EXPENSE":
-          const expenseData = await getTodayExpenses({ ownerPhone: ownerWaId });
+          const expenseData = await getTodayExpenses({ ownerPhone: resolvedOwnerPhone });
           if (!expenseData.expenses.length) {
             await sendTextMessage({
               to: ownerWaId,
@@ -586,6 +592,39 @@ async function receiveWebhook(req, res) {
             to: ownerWaId,
             text: getTemplate(language, "RESET_CONFIRM")
           });
+          break;
+
+        case "ADD_EMPLOYEE":
+          if (ownerWaId !== resolvedOwnerPhone) {
+            await sendTextMessage({
+              to: ownerWaId,
+              text: "Aap employee add nahi kar sakte. Sirf dukan ke owner ko permission hai."
+            });
+            return;
+          }
+          if (!employeeName || !employeePhone) {
+            await sendTextMessage({
+              to: ownerWaId,
+              text: "Employee ka naam aur phone number dono zaruri hai."
+            });
+            return;
+          }
+          try {
+            await addEmployee({ 
+              ownerPhone: resolvedOwnerPhone, 
+              employeePhone: normalizeCustomerPhone(employeePhone), 
+              employeeName 
+            });
+            await sendTextMessage({
+              to: ownerWaId,
+              text: `${employeeName} ab BharatBahi use kar sakta hai! Unhe apna koi bhi transaction message karne do.`
+            });
+          } catch (e) {
+            await sendTextMessage({
+              to: ownerWaId,
+              text: e.message || getErrorTemplate(language, 'DATABASE')
+            });
+          }
           break;
 
         default:

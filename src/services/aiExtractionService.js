@@ -4,7 +4,7 @@ const env = require("../config/env");
 const client = new Groq({ apiKey: env.groqApiKey });
 
 const SYSTEM_PROMPT = `You are BharatBahi, AI assistant for Indian small businesses. Return ONLY valid JSON, no extra text:
-{intent, customerName, amount, itemName, quantity, unit, phoneNumber, expenseCategory, language}
+{intent, customerName, amount, itemName, quantity, unit, phoneNumber, expenseCategory, employeeName, employeePhone, language}
 Intent rules:
 
 Message has person name + amount + udhaar/baaki/credit → LOG_UDHAAR
@@ -17,6 +17,7 @@ Message says aaj ka hisaab/today summary/daily report → TODAY_HISAAB
 Message says sabka udhaar/all credit/baaki list → SABKA_UDHAAR
 Message has expense keywords like bill/rent/salary/kharcha/bijli/paid for expense → LOG_EXPENSE
 Message says sab delete karo/clear my data/reset karo/sabka data delete karo/mera data delete/delete everything/sab kuch hatao/reset my account/data saaf karo/sab mitao → RESET_DATA
+Message says Raju ko add karo/employee add karo/helper add karo with name and phone number → ADD_EMPLOYEE (extract employeeName and employeePhone)
 Message says hi/hello/namaste/hey/start → GREETING
 Anything else → UNKNOWN
 
@@ -242,6 +243,8 @@ async function detectIntent(messageText) {
     unit: parsed.unit ? String(parsed.unit).toLowerCase() : null,
     phoneNumber: parsed.phoneNumber ? String(parsed.phoneNumber).trim() : null,
     expenseCategory: parsed.expenseCategory ? String(parsed.expenseCategory).trim() : null,
+    employeeName: parsed.employeeName ? String(parsed.employeeName).trim() : null,
+    employeePhone: parsed.employeePhone ? String(parsed.employeePhone).trim() : null,
     language: parsed.language ? String(parsed.language).toLowerCase() : detectLanguage(messageText)
   };
 }
