@@ -691,7 +691,7 @@ async function receiveWebhook(req, res) {
             });
             await sendTextMessage({
               to: ownerWaId,
-              text: `${employeeName} ab BharatBahi use kar sakta hai! Unhe apna koi bhi transaction message karne do.`
+              text: `${employeeName} ko add kar diya! 🎉 Ab ${employeeName} bhi shop ka hisaab rakh sakta hai — bas WhatsApp karo.`
             });
           } catch (e) {
             await sendTextMessage({
