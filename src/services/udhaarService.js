@@ -756,10 +756,54 @@ async function deleteAllOwnerData({ ownerPhone }) {
   }
 }
 
+/**
+ * Returns balance info for a single customer.
+ * { found: boolean, balance: number, displayName: string }
+ * Uses the same fuzzy normalizeCustomerName matching as getCustomerUdhaarTotal.
+ */
+async function getCustomerBalance({ customerName, ownerPhone }) {
+  try {
+    const normalizedSearch = normalizeCustomerName(customerName);
+
+    const { data, error } = await supabase
+      .from("udhaar_logs")
+      .select("customer_name,amount")
+      .eq("owner_phone", ownerPhone);
+
+    if (error) {
+      console.error('Supabase fetch failed in getCustomerBalance:', error.message);
+      throw new Error('Database error. Try again!');
+    }
+
+    const rows = (data || []).filter((row) => {
+      const normalizedRow = normalizeCustomerName(row.customer_name);
+      return (
+        normalizedRow === normalizedSearch ||
+        normalizedRow.includes(normalizedSearch) ||
+        normalizedSearch.includes(normalizedRow)
+      );
+    });
+
+    if (!rows.length) {
+      return { found: false, balance: 0, displayName: customerName };
+    }
+
+    // Use the first original name encountered as the display name
+    const displayName = String(rows[0].customer_name || customerName).trim();
+    const balance = rows.reduce((sum, row) => sum + Number(row.amount || 0), 0);
+
+    return { found: true, balance, displayName };
+  } catch (error) {
+    console.error('getCustomerBalance error:', error.message);
+    throw error;
+  }
+}
+
 module.exports = {
   logUdhaar,
   logWapas,
   getCustomerUdhaarTotal,
+  getCustomerBalance,
   getTodayHisaab,
   saveCustomerPhone,
   getCustomerPhone,

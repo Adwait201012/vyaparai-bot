@@ -8,6 +8,7 @@ const SYSTEM_PROMPT = `You are BharatBahi, AI assistant for Indian small busines
 Intent rules:
 
 Message says Raju ko add karo/employee add karo/helper add karo with name and phone number → ADD_EMPLOYEE (extract employeeName and employeePhone)
+Message has person name + kitna baaki/ka hisaab/kitna dena hai/udhaar check/baaki batao/baaki hai → CHECK_SINGLE_CUSTOMER_BALANCE (extract customerName only)
 Message has person name + amount + udhaar/baaki/credit → LOG_UDHAAR
 Message has person name + kitna udhaar/baaki kitna → CHECK_UDHAAR
 Message has person name + amount + wapas/diya/paid → LOG_WAPAS

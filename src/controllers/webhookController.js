@@ -6,6 +6,7 @@ const {
   logUdhaar,
   logWapas,
   getCustomerUdhaarTotal,
+  getCustomerBalance,
   getTodayHisaab,
   saveCustomerPhone,
   getCustomerPhone,
@@ -395,6 +396,27 @@ async function receiveWebhook(req, res) {
             text: getTemplate(language, "GREETING")
           });
           break;
+
+        case "CHECK_SINGLE_CUSTOMER_BALANCE": {
+          if (!customerName) {
+            await sendTextMessage({
+              to: ownerWaId,
+              text: getErrorTemplate(language, 'NAME_REQUIRED')
+            });
+            return;
+          }
+          const balResult = await getCustomerBalance({ customerName, ownerPhone: resolvedOwnerPhone });
+          let balReply;
+          if (!balResult.found) {
+            balReply = `${balResult.displayName} ji ka koi record nahi mila 🔍`;
+          } else if (balResult.balance <= 0) {
+            balReply = `${balResult.displayName} ji ka hisaab saaf hai ✅`;
+          } else {
+            balReply = `${balResult.displayName} ji ka baaki: ₹${formatAmount(balResult.balance)} 💰`;
+          }
+          await sendTextMessage({ to: ownerWaId, text: balReply });
+          break;
+        }
 
         case "LOG_UDHAAR":
           if (!customerName || !amount || amount <= 0) {
