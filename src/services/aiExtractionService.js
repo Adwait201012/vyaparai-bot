@@ -7,6 +7,7 @@ const SYSTEM_PROMPT = `You are BharatBahi, AI assistant for Indian small busines
 {intent, customerName, amount, itemName, quantity, unit, phoneNumber, expenseCategory, employeeName, employeePhone, language}
 Intent rules:
 
+Message says Raju ko add karo/employee add karo/helper add karo with name and phone number → ADD_EMPLOYEE (extract employeeName and employeePhone)
 Message has person name + amount + udhaar/baaki/credit → LOG_UDHAAR
 Message has person name + kitna udhaar/baaki kitna → CHECK_UDHAAR
 Message has person name + amount + wapas/diya/paid → LOG_WAPAS
@@ -17,7 +18,6 @@ Message says aaj ka hisaab/today summary/daily report → TODAY_HISAAB
 Message says sabka udhaar/all credit/baaki list → SABKA_UDHAAR
 Message has expense keywords like bill/rent/salary/kharcha/bijli/paid for expense → LOG_EXPENSE
 Message says sab delete karo/clear my data/reset karo/sabka data delete karo/mera data delete/delete everything/sab kuch hatao/reset my account/data saaf karo/sab mitao → RESET_DATA
-Message says Raju ko add karo/employee add karo/helper add karo with name and phone number → ADD_EMPLOYEE (extract employeeName and employeePhone)
 Message says hi/hello/namaste/hey/start → GREETING
 Anything else → UNKNOWN
 

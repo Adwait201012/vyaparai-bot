@@ -88,7 +88,7 @@ function formatUnit(quantity, unit, language) {
 // Hardcoded reply templates based on language
 const TEMPLATES = {
   hinglish: {
-    GREETING: "👋 Namaste! Main BharatBahi hun — aapka WhatsApp business assistant!\nMain har tarah ki dukan ke liye kaam karta hun 🏪\n💰 Udhaar log — Sharma ji 500 udhaar\n🔍 Udhaar check — Sharma ji kitna udhaar\n✅ Payment liya — Sharma ji 200 wapas\n� Stock add — chawal 50kg aaya\n📉 Stock check — chawal kitna hai\n� Sabka stock — sabka stock dikhao\n� Kharcha log — bijli bill 500 diya\n� Aaj ka hisaab — aaj ka hisaab\n� Sabka udhaar — sabka udhaar dikhao\n📱 Number save — Sharma ji number 9876543210\n🔔 Reminder — Sharma ji ko remind karo\nHindi, English ya voice — jo bhi aapko easy lage! 🎙️",
+    GREETING: "Namaste! 🙏 Main BharatBahi hun.\n\nBas likho — main samajh lunga.\n\n'Sharma ji 500 udhaar' ya 'aaj ka hisaab' —\nseedha kaam shuru karo.",
     LOG_UDHAAR: "✅ Done!\n👤 {name}\n💸 Udhaar: ₹{amount}\n📌 Total: ₹{total}",
     CHECK_UDHAAR: "👤 {name}\n💰 Baaki: ₹{total}",
     LOG_WAPAS: "✅ Payment!\n👤 {name}\n💵 Wapas: ₹{amount}\n📌 Baaki: ₹{remaining}",
@@ -108,7 +108,7 @@ const TEMPLATES = {
     UNKNOWN: "🤔 Samajh nahi aaya. Hi bhejo to main sab features dikhaunga!",
     ERRORS: {
       NETWORK: "Network issue, try again!",
-      DATABASE: "Database error, try again in 1 minute!",
+      DATABASE: "Kuch gadbad ho gayi, dobara try karo 🙏",
       NAME_REQUIRED: "Customer name required!",
       AMOUNT_REQUIRED: "Amount required!",
       ITEM_REQUIRED: "Item name required!",
@@ -137,7 +137,7 @@ const TEMPLATES = {
     UNKNOWN: "🤔 Could not understand. Send 'hi' to see all features!",
     ERRORS: {
       NETWORK: "Network issue, try again!",
-      DATABASE: "Database error, try again in 1 minute!",
+      DATABASE: "Kuch gadbad ho gayi, dobara try karo 🙏",
       NAME_REQUIRED: "Customer name required!",
       AMOUNT_REQUIRED: "Amount required!",
       ITEM_REQUIRED: "Item name required!",
@@ -166,7 +166,7 @@ const TEMPLATES = {
     UNKNOWN: "🤔 समझ नहीं आया। हाय भेजें तो मैं सभी फीचर्स दिखाऊंगा!",
     ERRORS: {
       NETWORK: "Network issue, try again!",
-      DATABASE: "Database error, try again in 1 minute!",
+      DATABASE: "Kuch gadbad ho gayi, dobara try karo 🙏",
       NAME_REQUIRED: "ग्राहक नाम आवश्यक!",
       AMOUNT_REQUIRED: "राशि आवश्यक!",
       ITEM_REQUIRED: "आइटम नाम आवश्यक!",
@@ -244,8 +244,9 @@ async function receiveWebhook(req, res) {
         return;
       }
 
-      const shopName = text.trim();
-      if (!shopName) {
+      // Apply title-case to shop name (Fix 3)
+      const rawShopName = text.trim();
+      if (!rawShopName) {
         await sendTextMessage({
           to: ownerWaId,
           text: "Shop ka naam nahi mila. Dobara 'Register karo' bhejo aur phir shop ka naam bhejo."
@@ -253,11 +254,16 @@ async function receiveWebhook(req, res) {
         return;
       }
 
+      const shopName = rawShopName
+        .split(" ")
+        .map(w => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase())
+        .join(" ");
+
       try {
         await registerShop({ ownerPhone: ownerWaId, shopName });
         await sendTextMessage({
           to: ownerWaId,
-          text: `Welcome! ${shopName} ab BharatBahi par registered hai. 🎉\nAb aap udhaar, stock, kharcha sab track kar sakte ho!`
+          text: getTemplate('hinglish', 'GREETING')
         });
       } catch (err) {
         await sendTextMessage({
@@ -274,12 +280,35 @@ async function receiveWebhook(req, res) {
     const registered = await isShopRegistered(resolvedOwnerPhone);
     if (!registered) {
       if (REGISTRATION_TRIGGER_RE.test(text)) {
-        // User wants to register — ask for shop name (step 2)
-        pendingShopName.set(ownerWaId, { timestamp: Date.now() });
-        await sendTextMessage({
-          to: ownerWaId,
-          text: "Apni shop ka naam kya hai? (sirf naam bhejo, jaise: Sharma General Store)"
-        });
+        // Extract shop name from the same message (Fix 2)
+        // Pattern: everything after the trigger keyword
+        const shopNameMatch = text.replace(REGISTRATION_TRIGGER_RE, "").trim();
+        if (shopNameMatch) {
+          // Shop name found inline — register immediately (Fix 3: title-case)
+          const shopName = shopNameMatch
+            .split(" ")
+            .map(w => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase())
+            .join(" ");
+          try {
+            await registerShop({ ownerPhone: ownerWaId, shopName });
+            await sendTextMessage({
+              to: ownerWaId,
+              text: getTemplate('hinglish', 'GREETING')
+            });
+          } catch (err) {
+            await sendTextMessage({
+              to: ownerWaId,
+              text: err.message || "Registration nahi ho payi. Dobara try karo."
+            });
+          }
+        } else {
+          // No shop name in message — fall back to two-step flow
+          pendingShopName.set(ownerWaId, { timestamp: Date.now() });
+          await sendTextMessage({
+            to: ownerWaId,
+            text: "Apni shop ka naam kya hai? (sirf naam bhejo, jaise: Sharma General Store)"
+          });
+        }
       } else {
         await sendTextMessage({
           to: ownerWaId,
