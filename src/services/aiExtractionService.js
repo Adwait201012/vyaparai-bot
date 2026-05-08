@@ -19,6 +19,7 @@ Message says aaj ka hisaab/today summary/daily report → TODAY_HISAAB
 Message says sabka udhaar/all credit/baaki list → SABKA_UDHAAR
 Message has expense keywords like bill/rent/salary/kharcha/bijli/paid for expense → LOG_EXPENSE
 Message says sab delete karo/clear my data/reset karo/sabka data delete karo/mera data delete/delete everything/sab kuch hatao/reset my account/data saaf karo/sab mitao → RESET_DATA
+Message says last entry/pichli entry/recent entries/last 3/aakhri entry/recent transactions/last entries dikhao → LAST_ENTRIES
 Message says hi/hello/namaste/hey/start → GREETING
 Anything else → UNKNOWN
 

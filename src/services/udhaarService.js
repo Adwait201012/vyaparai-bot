@@ -799,11 +799,33 @@ async function getCustomerBalance({ customerName, ownerPhone }) {
   }
 }
 
+async function getLastEntries({ ownerPhone, limit = 3 }) {
+  try {
+    const { data, error } = await supabase
+      .from("udhaar_logs")
+      .select("customer_name,amount,created_at")
+      .eq("owner_phone", ownerPhone)
+      .order("created_at", { ascending: false })
+      .limit(limit);
+
+    if (error) {
+      console.error('Supabase fetch failed in getLastEntries:', error.message);
+      throw new Error('Database error. Try again!');
+    }
+
+    return data || [];
+  } catch (error) {
+    console.error('getLastEntries error:', error.message);
+    throw error;
+  }
+}
+
 module.exports = {
   logUdhaar,
   logWapas,
   getCustomerUdhaarTotal,
   getCustomerBalance,
+  getLastEntries,
   getTodayHisaab,
   saveCustomerPhone,
   getCustomerPhone,
