@@ -374,7 +374,7 @@ async function receiveWebhook(req, res) {
       return;
     }
 
-    const {
+    let {
       intent = "UNKNOWN",
       customerName,
       amount,
@@ -387,6 +387,11 @@ async function receiveWebhook(req, res) {
       employeePhone,
       language = "hinglish"
     } = aiResult;
+
+    // Fallback logic for greetings
+    if (intent === "UNKNOWN" && text.trim().split(/\s+/).length < 4) {
+      intent = "GREETING";
+    }
 
     // Handle different intents
     try {
