@@ -24,6 +24,8 @@ const {
   addEmployee,
   isShopRegistered,
   registerShop,
+  searchCustomersByName,
+  createCustomer,
 } = require("../services/udhaarService");
 const { sendTextMessage } = require("../services/whatsappService");
 const {
@@ -44,6 +46,11 @@ const DELETE_CONFIRM_EXPIRY_MS = 2 * 60 * 1000; // 2 minutes
 // their NEXT message is treated as the shop name.
 const pendingShopName = new Map();
 const REGISTRATION_EXPIRY_MS = 5 * 60 * 1000; // 5 minutes
+
+// In-memory map for disambiguation sessions.
+// Key: ownerWaId, Value: { timestamp, options: [], pendingAction: { intent, customerName, amount } }
+const pendingDisambiguation = new Map();
+const DISAMBIGUATION_EXPIRY_MS = 5 * 60 * 1000; // 5 minutes
 
 // Regex to detect registration intent without calling Groq
 const REGISTRATION_TRIGGER_RE =
@@ -361,17 +368,35 @@ async function receiveWebhook(req, res) {
       return;
     }
 
-    // Get intent from Groq first
     let aiResult;
-    try {
-      aiResult = await detectIntent(text);
-    } catch (error) {
-      console.error('Groq detection failed:', error.message);
-      await sendTextMessage({
-        to: ownerWaId,
-        text: getErrorTemplate('hinglish', 'NETWORK')
-      });
-      return;
+    
+    // ── DISAMBIGUATION check ──────────────────────────────
+    if (pendingDisambiguation.has(ownerWaId)) {
+      const session = pendingDisambiguation.get(ownerWaId);
+      pendingDisambiguation.delete(ownerWaId); // clear it
+      
+      if (Date.now() - session.timestamp <= DISAMBIGUATION_EXPIRY_MS) {
+        const choice = parseInt(text.trim(), 10);
+        if (!isNaN(choice) && choice >= 1 && choice <= session.options.length) {
+          const chosenCustomer = session.options[choice - 1];
+          aiResult = session.pendingAction;
+          aiResult.customerName = chosenCustomer.customer_name;
+        }
+      }
+    }
+
+    // Get intent from Groq first (if not already set by disambiguation)
+    if (!aiResult) {
+      try {
+        aiResult = await detectIntent(text);
+      } catch (error) {
+        console.error('Groq detection failed:', error.message);
+        await sendTextMessage({
+          to: ownerWaId,
+          text: getErrorTemplate('hinglish', 'NETWORK')
+        });
+        return;
+      }
     }
 
     let {
@@ -411,6 +436,27 @@ async function receiveWebhook(req, res) {
             });
             return;
           }
+
+          const customers = await searchCustomersByName({ customerName, ownerPhone: resolvedOwnerPhone });
+          if (customers.length === 0) {
+            const newCust = await createCustomer({ customerName, ownerPhone: resolvedOwnerPhone });
+            customerName = newCust.customer_name;
+          } else if (customers.length === 1) {
+            customerName = customers[0].customer_name;
+          } else {
+            pendingDisambiguation.set(ownerWaId, {
+              timestamp: Date.now(),
+              options: customers,
+              pendingAction: aiResult
+            });
+            const optionsText = customers.map((c, i) => `${i + 1}. ${c.customer_name}`).join("\n");
+            await sendTextMessage({
+              to: ownerWaId,
+              text: `Kaun sa ${customerName} — \n${optionsText}\n(number bhejo)`
+            });
+            break;
+          }
+
           const balResult = await getCustomerBalance({ customerName, ownerPhone: resolvedOwnerPhone });
           let balReply;
           if (!balResult.found) {
@@ -424,7 +470,7 @@ async function receiveWebhook(req, res) {
           break;
         }
 
-        case "LOG_UDHAAR":
+        case "LOG_UDHAAR": {
           if (!customerName || !amount || amount <= 0) {
             await sendTextMessage({
               to: ownerWaId,
@@ -432,6 +478,27 @@ async function receiveWebhook(req, res) {
             });
             return;
           }
+
+          const customers = await searchCustomersByName({ customerName, ownerPhone: resolvedOwnerPhone });
+          if (customers.length === 0) {
+            const newCust = await createCustomer({ customerName, ownerPhone: resolvedOwnerPhone });
+            customerName = newCust.customer_name;
+          } else if (customers.length === 1) {
+            customerName = customers[0].customer_name;
+          } else {
+            pendingDisambiguation.set(ownerWaId, {
+              timestamp: Date.now(),
+              options: customers,
+              pendingAction: aiResult
+            });
+            const optionsText = customers.map((c, i) => `${i + 1}. ${c.customer_name}`).join("\n");
+            await sendTextMessage({
+              to: ownerWaId,
+              text: `Kaun sa ${customerName} — \n${optionsText}\n(number bhejo)`
+            });
+            break;
+          }
+
           await logUdhaar({ customerName, amount, ownerPhone: resolvedOwnerPhone });
           const total = await getCustomerUdhaarTotal({ customerName, ownerPhone: resolvedOwnerPhone });
           await sendTextMessage({
@@ -443,6 +510,7 @@ async function receiveWebhook(req, res) {
             })
           });
           break;
+        }
 
         case "CHECK_UDHAAR":
           if (!customerName) {
@@ -462,7 +530,7 @@ async function receiveWebhook(req, res) {
           });
           break;
 
-        case "LOG_WAPAS":
+        case "LOG_WAPAS": {
           if (!customerName || !amount || amount <= 0) {
             await sendTextMessage({
               to: ownerWaId,
@@ -470,6 +538,27 @@ async function receiveWebhook(req, res) {
             });
             return;
           }
+
+          const customers = await searchCustomersByName({ customerName, ownerPhone: resolvedOwnerPhone });
+          if (customers.length === 0) {
+            const newCust = await createCustomer({ customerName, ownerPhone: resolvedOwnerPhone });
+            customerName = newCust.customer_name;
+          } else if (customers.length === 1) {
+            customerName = customers[0].customer_name;
+          } else {
+            pendingDisambiguation.set(ownerWaId, {
+              timestamp: Date.now(),
+              options: customers,
+              pendingAction: aiResult
+            });
+            const optionsText = customers.map((c, i) => `${i + 1}. ${c.customer_name}`).join("\n");
+            await sendTextMessage({
+              to: ownerWaId,
+              text: `Kaun sa ${customerName} — \n${optionsText}\n(number bhejo)`
+            });
+            break;
+          }
+
           await logWapas({ customerName, amount, ownerPhone: resolvedOwnerPhone });
           const remaining = await getCustomerUdhaarTotal({ customerName, ownerPhone: resolvedOwnerPhone });
           const safeRemaining = Math.max(0, remaining);
@@ -482,6 +571,7 @@ async function receiveWebhook(req, res) {
             })
           });
           break;
+        }
 
         case "TODAY_HISAAB":
           const today = await getTodayHisaab({ ownerPhone: resolvedOwnerPhone });

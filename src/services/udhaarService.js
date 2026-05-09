@@ -820,6 +820,56 @@ async function getLastEntries({ ownerPhone, limit = 3 }) {
   }
 }
 
+async function searchCustomersByName({ customerName, ownerPhone }) {
+  try {
+    const normalizedSearch = normalizeCustomerName(customerName);
+    
+    const { data, error } = await supabase
+      .from("customers")
+      .select("id,customer_name,phone_number")
+      .eq("owner_phone", ownerPhone);
+
+    if (error) {
+      console.error('Supabase fetch failed in searchCustomersByName:', error.message);
+      throw new Error('Database error. Try again!');
+    }
+
+    const matched = (data || []).filter((row) => {
+      const normalizedRow = normalizeCustomerName(row.customer_name);
+      return (
+        normalizedRow === normalizedSearch ||
+        normalizedRow.includes(normalizedSearch) ||
+        normalizedSearch.includes(normalizedRow)
+      );
+    });
+
+    return matched;
+  } catch (error) {
+    console.error('searchCustomersByName error:', error.message);
+    throw error;
+  }
+}
+
+async function createCustomer({ customerName, phone = null, ownerPhone }) {
+  try {
+    const { data, error } = await supabase
+      .from("customers")
+      .insert([{ customer_name: customerName, phone_number: phone, owner_phone: ownerPhone }])
+      .select()
+      .single();
+
+    if (error) {
+      console.error('Supabase insert failed in createCustomer:', error.message);
+      throw new Error('Database error. Try again!');
+    }
+
+    return data;
+  } catch (error) {
+    console.error('createCustomer error:', error.message);
+    throw error;
+  }
+}
+
 module.exports = {
   logUdhaar,
   logWapas,
@@ -843,4 +893,6 @@ module.exports = {
   addEmployee,
   isShopRegistered,
   registerShop,
+  searchCustomersByName,
+  createCustomer,
 };
