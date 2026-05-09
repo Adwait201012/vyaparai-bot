@@ -27,6 +27,7 @@ const {
   registerShop,
   searchCustomersByName,
   createCustomer,
+  deductInventoryStock,
 } = require("../services/udhaarService");
 const { sendTextMessage } = require("../services/whatsappService");
 const {
@@ -666,6 +667,50 @@ async function receiveWebhook(req, res) {
             });
           }
           break;
+
+        case "STOCK_OUT": {
+          if (!itemName || !quantity || quantity <= 0) {
+            await sendTextMessage({
+              to: ownerWaId,
+              text: getErrorTemplate(language, 'ITEM_REQUIRED')
+            });
+            return;
+          }
+
+          const result = await deductInventoryStock({ itemName, quantity, ownerPhone: resolvedOwnerPhone });
+          
+          if (result.status === "NOT_FOUND") {
+            await sendTextMessage({
+              to: ownerWaId,
+              text: `${itemName} inventory mein nahi mila 🔍\nPehle add karo: '${itemName} ${quantity} aaya'`
+            });
+            return;
+          }
+
+          if (result.status === "INSUFFICIENT") {
+            await sendTextMessage({
+              to: ownerWaId,
+              text: `⚠️ Sirf ${formatAmount(result.item.quantity)} ${result.item.unit} ${result.item.item_name} bacha hai!`
+            });
+            return;
+          }
+
+          // SUCCESS
+          await sendTextMessage({
+            to: ownerWaId,
+            text: `✅ ${result.item.item_name} ${formatAmount(quantity)} gaya. Baaki stock: ${formatAmount(result.item.quantity)} ${result.item.unit}`
+          });
+
+          // Check for low stock alert
+          const lowStockOut = getLowStockAlertInfo(result.item);
+          if (lowStockOut.isLow) {
+            await sendTextMessage({
+              to: ownerWaId,
+              text: `⚠️ ${lowStockOut.itemName} ka stock kam ho raha hai!\nSirf ${formatAmount(lowStockOut.quantity)} ${lowStockOut.unit ? lowStockOut.unit : ""} bacha.`
+            });
+          }
+          break;
+        }
 
         case "CHECK_STOCK":
           if (!itemName) {

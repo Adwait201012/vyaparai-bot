@@ -929,6 +929,42 @@ async function createCustomer({ customerName, phone = null, ownerPhone }) {
   }
 }
 
+async function deductInventoryStock({ itemName, quantity, ownerPhone }) {
+  try {
+    const stock = await getInventoryStock({ itemName, ownerPhone });
+    if (!stock) {
+      return { status: "NOT_FOUND", item: null };
+    }
+
+    const currentQty = Number(stock.quantity || 0);
+    const requestedQty = Number(quantity || 0);
+
+    if (currentQty < requestedQty) {
+      return { status: "INSUFFICIENT", item: stock };
+    }
+
+    const nextQty = currentQty - requestedQty;
+
+    const { data, error } = await supabase
+      .from("inventory")
+      .update({ quantity: nextQty })
+      .eq("id", stock.id)
+      .eq("owner_phone", ownerPhone)
+      .select("*")
+      .single();
+
+    if (error) {
+      console.error('Supabase update failed:', error.message);
+      throw new Error('Database error. Try again!');
+    }
+
+    return { status: "SUCCESS", item: data };
+  } catch (error) {
+    console.error('deductInventoryStock error:', error.message);
+    throw error;
+  }
+}
+
 module.exports = {
   logUdhaar,
   logWapas,
@@ -954,4 +990,5 @@ module.exports = {
   registerShop,
   searchCustomersByName,
   createCustomer,
+  deductInventoryStock,
 };
