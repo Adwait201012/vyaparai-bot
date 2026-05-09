@@ -728,29 +728,29 @@ async function receiveWebhook(req, res) {
         case "LAST_ENTRIES": {
           const entries = await getLastEntries({ ownerPhone: resolvedOwnerPhone, limit: 3 });
           if (!entries.length) {
-            await sendTextMessage({ to: ownerWaId, text: "Abhi koi entry nahi hai" });
+            await sendTextMessage({ to: ownerWaId, text: "Abhi tak koi entry nahi hai 📋" });
             break;
           }
           const IST_OFFSET_MS = 5.5 * 60 * 60 * 1000;
-          const nowIST = new Date(Date.now() + IST_OFFSET_MS);
-          const todayIST = new Date(Date.UTC(nowIST.getUTCFullYear(), nowIST.getUTCMonth(), nowIST.getUTCDate()));
 
           const lines = entries.map((entry, i) => {
             const entryIST = new Date(new Date(entry.created_at).getTime() + IST_OFFSET_MS);
-            const entryDayIST = new Date(Date.UTC(entryIST.getUTCFullYear(), entryIST.getUTCMonth(), entryIST.getUTCDate()));
-            const diffDays = Math.round((todayIST - entryDayIST) / (24 * 60 * 60 * 1000));
-            let timeLabel;
-            if (diffDays === 0) timeLabel = "aaj";
-            else if (diffDays === 1) timeLabel = "kal";
-            else timeLabel = `${diffDays} din pehle`;
+            
+            let hours = entryIST.getUTCHours();
+            const minutes = entryIST.getUTCMinutes();
+            const ampm = hours >= 12 ? 'PM' : 'AM';
+            hours = hours % 12;
+            hours = hours ? hours : 12; // the hour '0' should be '12'
+            const minStr = minutes < 10 ? '0' + minutes : minutes;
+            const timeLabel = `${hours}:${minStr} ${ampm}`;
 
             const amt = Math.abs(Number(entry.amount || 0));
             const type = Number(entry.amount || 0) >= 0 ? "udhaar" : "wapas";
-            return `${i + 1}. ${entry.customer_name} \u2014 Rs.${formatAmount(amt)} ${type} (${timeLabel})`;
+            return `${i + 1}. ${entry.customer_name} — ₹${formatAmount(amt)} ${type} — ${timeLabel}`;
           });
           await sendTextMessage({
             to: ownerWaId,
-            text: `\ud83d\udccb Last ${entries.length} entries:\n${lines.join("\n")}`
+            text: `📋 Aakhri ${entries.length} entries:\n${lines.join("\n")}`
           });
           break;
         }

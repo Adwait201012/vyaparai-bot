@@ -9,6 +9,7 @@ Intent rules:
 
 Message says Raju ko add karo/employee add karo/helper add karo with name and phone number → ADD_EMPLOYEE (extract employeeName and employeePhone)
 Message has person name + kitna baaki/ka hisaab/kitna dena hai/udhaar check/baaki batao/baaki hai → CHECK_SINGLE_CUSTOMER_BALANCE (extract customerName only)
+Message says last entry dikhao/last entry/pichli entry/abhi kya likha/last transaction/kya likha abhi/recent entries/pichle transactions → LAST_ENTRIES
 Message has person name + amount + udhaar/baaki/credit → LOG_UDHAAR
 Message has person name + kitna udhaar/baaki kitna → CHECK_UDHAAR
 Message has person name + amount + wapas/diya/paid → LOG_WAPAS
@@ -19,7 +20,6 @@ Message says aaj ka hisaab/today summary/daily report → TODAY_HISAAB
 Message says sabka udhaar/all credit/baaki list → SABKA_UDHAAR
 Message has expense keywords like bill/rent/salary/kharcha/bijli/paid for expense → LOG_EXPENSE
 Message says sab delete karo/clear my data/reset karo/sabka data delete karo/mera data delete/delete everything/sab kuch hatao/reset my account/data saaf karo/sab mitao → RESET_DATA
-Message says last entry/pichli entry/recent entries/last 3/aakhri entry/recent transactions/last entries dikhao → LAST_ENTRIES
 Message says hi/hii/hiii/hey/hello/helo/hlo/namaste/namasthe/nmste/ram ram/jai shree krishna/jai jinendra/haan/han/ha/help/halp/kya hai/kya karta hai/kya ho/start/shuru/chalu/good morning/good evening/gm/ge → GREETING
 Anything else → UNKNOWN
 
