@@ -677,6 +677,65 @@ async function getTodayExpenses({ ownerPhone }) {
   }
 }
 
+async function getMonthlyHisaab({ ownerPhone }) {
+  try {
+    const IST_OFFSET_MS = 5.5 * 60 * 60 * 1000;
+    const nowIST = new Date(Date.now() + IST_OFFSET_MS);
+    const year = nowIST.getUTCFullYear();
+    const month = nowIST.getUTCMonth();
+
+    // IST 1st of month midnight → UTC
+    const startOfMonth = new Date(Date.UTC(year, month, 1) - IST_OFFSET_MS);
+    // IST last day of month 23:59:59.999 → UTC
+    const lastDay = new Date(Date.UTC(year, month + 1, 0));
+    const endOfMonth = new Date(Date.UTC(year, month, lastDay.getUTCDate(), 23, 59, 59, 999) - IST_OFFSET_MS);
+
+    const { data, error } = await supabase
+      .from("udhaar_logs")
+      .select("customer_name,amount,created_at")
+      .eq("owner_phone", ownerPhone)
+      .gte("created_at", startOfMonth.toISOString())
+      .lte("created_at", endOfMonth.toISOString());
+
+    if (error) {
+      console.error('Supabase fetch failed in getMonthlyHisaab:', error.message);
+      throw new Error('Database error. Try again!');
+    }
+
+    const rows = data || [];
+    const totalUdhaar = rows
+      .filter(row => Number(row.amount || 0) > 0)
+      .reduce((sum, row) => sum + Number(row.amount || 0), 0);
+
+    const totalWapas = rows
+      .filter(row => Number(row.amount || 0) < 0)
+      .reduce((sum, row) => sum + Math.abs(Number(row.amount || 0)), 0);
+
+    const netPending = totalUdhaar - totalWapas;
+    
+    // Count unique customers using normalized names
+    const uniqueCustomers = new Set();
+    rows.forEach(row => {
+      if (row.customer_name) {
+        uniqueCustomers.add(normalizeCustomerName(row.customer_name));
+      }
+    });
+
+    const monthNames = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
+    
+    return {
+      totalUdhaar,
+      totalWapas,
+      netPending,
+      uniqueCustomerCount: uniqueCustomers.size,
+      monthName: monthNames[month]
+    };
+  } catch (error) {
+    console.error('getMonthlyHisaab error:', error.message);
+    throw error;
+  }
+}
+
 async function getMonthlyExpenses({ ownerPhone }) {
   try {
     const IST_OFFSET_MS = 5.5 * 60 * 60 * 1000;

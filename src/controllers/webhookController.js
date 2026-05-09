@@ -9,6 +9,7 @@ const {
   getCustomerBalance,
   getLastEntries,
   getTodayHisaab,
+  getMonthlyHisaab,
   saveCustomerPhone,
   getCustomerPhone,
   getAllPendingUdhaar,
@@ -569,6 +570,26 @@ async function receiveWebhook(req, res) {
               amount: formatAmount(amount),
               remaining: formatAmount(safeRemaining)
             })
+          });
+          break;
+        }
+
+        case "MONTHLY_SUMMARY": {
+          const monthData = await getMonthlyHisaab({ ownerPhone: resolvedOwnerPhone });
+          
+          let textMsg = `📊 ${monthData.monthName} ka hisaab:\n\n`;
+          textMsg += `💸 Udhaar diya: ₹${formatAmount(monthData.totalUdhaar)}\n`;
+          textMsg += `✅ Wapas mila: ₹${formatAmount(monthData.totalWapas)}\n`;
+          textMsg += `⏳ Abhi bhi baaki: ₹${formatAmount(monthData.netPending)}\n`;
+          textMsg += `👥 Customers: ${monthData.uniqueCustomerCount}\n`;
+          
+          if (monthData.netPending > 0) {
+            textMsg += `\n₹${formatAmount(monthData.netPending)} abhi bhi lena baaki hai`;
+          }
+          
+          await sendTextMessage({
+            to: ownerWaId,
+            text: textMsg
           });
           break;
         }
